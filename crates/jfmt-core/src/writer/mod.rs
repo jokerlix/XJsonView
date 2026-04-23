@@ -5,7 +5,7 @@ pub mod minify;
 pub mod pretty;
 
 pub use minify::MinifyWriter;
-pub use pretty::PrettyWriter;
+pub use pretty::{PrettyConfig, PrettyWriter};
 
 use crate::event::Event;
 use crate::Result;

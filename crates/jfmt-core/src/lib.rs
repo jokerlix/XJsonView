@@ -12,4 +12,4 @@ pub mod writer;
 pub use error::{Error, Result};
 pub use event::{Event, Scalar};
 pub use parser::EventReader;
-pub use writer::{EventWriter, MinifyWriter, PrettyWriter};
+pub use writer::{EventWriter, MinifyWriter, PrettyConfig, PrettyWriter};
