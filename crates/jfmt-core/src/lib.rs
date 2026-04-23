@@ -5,6 +5,8 @@
 
 pub mod error;
 pub mod event;
+pub mod parser;
 
 pub use error::{Error, Result};
 pub use event::{Event, Scalar};
+pub use parser::EventReader;
