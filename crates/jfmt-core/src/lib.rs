@@ -4,6 +4,7 @@
 //! Memory usage is O(nesting depth), not O(file size).
 
 pub mod error;
+pub mod escape;
 pub mod event;
 pub mod parser;
 
