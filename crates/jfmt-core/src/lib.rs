@@ -4,5 +4,7 @@
 //! Memory usage is O(nesting depth), not O(file size).
 
 pub mod error;
+pub mod event;
 
 pub use error::{Error, Result};
+pub use event::{Event, Scalar};
