@@ -10,3 +10,6 @@ jfmt-core = { path = "../jfmt-core" }
 flate2 = { workspace = true }
 zstd = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
