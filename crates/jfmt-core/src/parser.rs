@@ -121,6 +121,31 @@ impl<R: Read> EventReader<R> {
     pub fn depth(&self) -> usize {
         self.stack.len()
     }
+
+    /// After the top-level value has been consumed, verify no non-whitespace
+    /// bytes remain. Consumes the reader. Call this when strict validation
+    /// is required (e.g. `validate_syntax`); transcoding paths typically skip it.
+    pub fn finish(self) -> Result<()> {
+        self.inner.consume_trailing_whitespace().map_err(|e| {
+            // consume_trailing_whitespace returns ReaderError; map via the
+            // same helper the rest of the reader uses.
+            match e {
+                struson::reader::ReaderError::IoError { error, .. } => Error::Io(error),
+                struson::reader::ReaderError::SyntaxError(se) => Error::Syntax {
+                    offset: se.location.data_pos.unwrap_or(0),
+                    line: se.location.line_pos.as_ref().map(|lp| lp.line),
+                    column: se.location.line_pos.as_ref().map(|lp| lp.column),
+                    message: format!("{:?}", se.kind),
+                },
+                other => Error::Syntax {
+                    offset: 0,
+                    line: None,
+                    column: None,
+                    message: format!("{other}"),
+                },
+            }
+        })
+    }
 }
 
 fn map_err(e: ReaderError) -> Error {

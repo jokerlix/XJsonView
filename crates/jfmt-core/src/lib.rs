@@ -8,10 +8,12 @@ pub mod escape;
 pub mod event;
 pub mod parser;
 pub mod transcode;
+pub mod validate;
 pub mod writer;
 
 pub use error::{Error, Result};
 pub use event::{Event, Scalar};
 pub use parser::EventReader;
 pub use transcode::transcode;
+pub use validate::validate_syntax;
 pub use writer::{EventWriter, MinifyWriter, PrettyConfig, PrettyWriter};
