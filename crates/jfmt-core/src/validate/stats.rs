@@ -55,6 +55,28 @@ fn is_zero_u64(n: &u64) -> bool {
     *n == 0
 }
 
+impl Stats {
+    /// Merge `other` into `self`. Commutative. Cap on
+    /// `top_level_keys` is a per-pass guard, not a post-merge
+    /// invariant — merged maps may exceed any individual collector's
+    /// cap.
+    pub fn merge(&mut self, other: Stats) {
+        self.records += other.records;
+        self.valid += other.valid;
+        self.invalid += other.invalid;
+        if other.max_depth > self.max_depth {
+            self.max_depth = other.max_depth;
+        }
+        for (k, v) in other.top_level_types {
+            *self.top_level_types.entry(k).or_insert(0) += v;
+        }
+        for (k, v) in other.top_level_keys {
+            *self.top_level_keys.entry(k).or_insert(0) += v;
+        }
+        self.top_level_keys_truncated += other.top_level_keys_truncated;
+    }
+}
+
 impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
@@ -289,6 +311,47 @@ mod tests {
         assert!(text.contains("  object: 2"));
         assert!(text.contains("top-level keys:"));
         assert!(text.contains("  a: 2"));
+    }
+
+    #[test]
+    fn merge_sums_counts_and_unions_keys() {
+        let mut a = Stats {
+            records: 2,
+            valid: 2,
+            invalid: 0,
+            max_depth: 3,
+            ..Default::default()
+        };
+        a.top_level_types.insert("object".into(), 2);
+        a.top_level_keys.insert("x".into(), 2);
+        a.top_level_keys.insert("only_in_a".into(), 1);
+        a.top_level_keys_truncated = 1;
+
+        let mut b = Stats {
+            records: 1,
+            valid: 0,
+            invalid: 1,
+            max_depth: 5,
+            ..Default::default()
+        };
+        b.top_level_types.insert("object".into(), 1);
+        b.top_level_types.insert("array".into(), 1);
+        b.top_level_keys.insert("x".into(), 3);
+        b.top_level_keys.insert("only_in_b".into(), 2);
+        b.top_level_keys_truncated = 4;
+
+        a.merge(b);
+
+        assert_eq!(a.records, 3);
+        assert_eq!(a.valid, 2);
+        assert_eq!(a.invalid, 1);
+        assert_eq!(a.max_depth, 5);
+        assert_eq!(a.top_level_types.get("object"), Some(&3));
+        assert_eq!(a.top_level_types.get("array"), Some(&1));
+        assert_eq!(a.top_level_keys.get("x"), Some(&5));
+        assert_eq!(a.top_level_keys.get("only_in_a"), Some(&1));
+        assert_eq!(a.top_level_keys.get("only_in_b"), Some(&2));
+        assert_eq!(a.top_level_keys_truncated, 5);
     }
 
     #[test]
