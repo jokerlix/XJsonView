@@ -257,6 +257,8 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 | M5 | JSON Schema support | `jsonschema` integration, path reporting, combined validation | 3–4 days |
 | M6 | Release polish | progress bar, `cargo-dist`, README, multi-platform CI | 1 week |
 
+| M1 ✓ | Shipped v0.0.1 on 2026-04-24 (tag `v0.0.1`) |
+
 **Total:** ~6–8 weeks full-time for v0.1.
 
 ## 12. Open Questions
