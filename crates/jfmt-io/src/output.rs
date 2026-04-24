@@ -46,10 +46,10 @@ impl OutputSpec {
 /// Open the output sink described by `spec`. The returned `Write` must be
 /// dropped (or explicitly finished) before any compressed stream footer
 /// is flushed — wrapping in `BufWriter` ensures Drop writes a clean end.
-pub fn open_output(spec: &OutputSpec) -> io::Result<Box<dyn Write>> {
-    let raw: Box<dyn Write> = match &spec.path {
+pub fn open_output(spec: &OutputSpec) -> io::Result<Box<dyn Write + Send>> {
+    let raw: Box<dyn Write + Send> = match &spec.path {
         Some(p) => Box::new(File::create(p)?),
-        None => Box::new(io::stdout().lock()),
+        None => Box::new(io::stdout()),
     };
 
     let compression = spec
@@ -59,7 +59,7 @@ pub fn open_output(spec: &OutputSpec) -> io::Result<Box<dyn Write>> {
             None => Compression::None,
         });
 
-    let encoded: Box<dyn Write> = match compression {
+    let encoded: Box<dyn Write + Send> = match compression {
         Compression::None => raw,
         Compression::Gzip => Box::new(GzEncoder::new(
             raw,

@@ -29,10 +29,10 @@ impl InputSpec {
 }
 
 /// Open the input described by `spec` and return a boxed `BufRead`.
-pub fn open_input(spec: &InputSpec) -> io::Result<Box<dyn BufRead>> {
-    let raw: Box<dyn Read> = match &spec.path {
+pub fn open_input(spec: &InputSpec) -> io::Result<Box<dyn BufRead + Send>> {
+    let raw: Box<dyn Read + Send> = match &spec.path {
         Some(p) => Box::new(File::open(p)?),
-        None => Box::new(io::stdin().lock()),
+        None => Box::new(io::stdin()),
     };
 
     let compression = spec
@@ -42,7 +42,7 @@ pub fn open_input(spec: &InputSpec) -> io::Result<Box<dyn BufRead>> {
             None => Compression::None,
         });
 
-    let decoded: Box<dyn Read> = match compression {
+    let decoded: Box<dyn Read + Send> = match compression {
         Compression::None => raw,
         Compression::Gzip => Box::new(MultiGzDecoder::new(raw)),
         Compression::Zstd => Box::new(zstd::stream::Decoder::new(raw)?),
