@@ -128,10 +128,14 @@ fn map_err(e: ReaderError) -> Error {
         ReaderError::IoError { error, .. } => Error::Io(error),
         ReaderError::SyntaxError(se) => Error::Syntax {
             offset: se.location.data_pos.unwrap_or(0),
+            line: se.location.line_pos.as_ref().map(|lp| lp.line),
+            column: se.location.line_pos.as_ref().map(|lp| lp.column),
             message: format!("{:?}", se.kind),
         },
         other => Error::Syntax {
             offset: 0,
+            line: None,
+            column: None,
             message: format!("{other}"),
         },
     }
@@ -229,5 +233,24 @@ mod tests {
             }
         };
         assert!(matches!(err, Error::Syntax { .. }), "got {err:?}");
+    }
+
+    #[test]
+    fn syntax_error_carries_line_and_column() {
+        let mut r = EventReader::new(b"{\n  \"a\":,\n}".as_slice());
+        let err = loop {
+            match r.next_event() {
+                Ok(None) => panic!("expected error"),
+                Ok(Some(_)) => continue,
+                Err(e) => break e,
+            }
+        };
+        match err {
+            Error::Syntax { line, column, .. } => {
+                assert!(line.is_some(), "line not populated");
+                assert!(column.is_some(), "column not populated");
+            }
+            other => panic!("got {other:?}"),
+        }
     }
 }

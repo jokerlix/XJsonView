@@ -9,12 +9,24 @@ pub enum Error {
     Io(#[from] io::Error),
 
     /// The input bytes are not valid JSON.
-    #[error("syntax error at byte {offset}: {message}")]
-    Syntax { offset: u64, message: String },
+    #[error("syntax error at {}: {message}", format_location(.offset, .line, .column))]
+    Syntax {
+        offset: u64,
+        line: Option<u64>,
+        column: Option<u64>,
+        message: String,
+    },
 
     /// The parser/writer was called in an unexpected state (internal bug).
     #[error("invalid state: {0}")]
     State(String),
+}
+
+fn format_location(offset: &u64, line: &Option<u64>, column: &Option<u64>) -> String {
+    match (line, column) {
+        (Some(l), Some(c)) => format!("line {l} column {c} (byte {offset})"),
+        _ => format!("byte {offset}"),
+    }
 }
 
 /// Convenience alias.
