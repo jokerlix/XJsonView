@@ -115,6 +115,33 @@ fn validate_ndjson_fail_fast_stops_after_first_bad() {
 }
 
 #[test]
+fn validate_ndjson_parallel_matches_serial_stats() {
+    let dir = tempfile::tempdir().unwrap();
+    let s1 = dir.path().join("s1.json");
+    let s4 = dir.path().join("s4.json");
+
+    for (path, threads) in [(&s1, "1"), (&s4, "4")] {
+        Command::cargo_bin("jfmt")
+            .unwrap()
+            .arg("--threads")
+            .arg(threads)
+            .arg("validate")
+            .arg("--ndjson")
+            .arg("--stats-json")
+            .arg(path)
+            .arg(fixture("ndjson-many.ndjson"))
+            .assert()
+            .success();
+    }
+
+    let v1: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&s1).unwrap()).unwrap();
+    let v4: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&s4).unwrap()).unwrap();
+    assert_eq!(v1, v4);
+}
+
+#[test]
 fn validate_ndjson_stats_counts_valid_and_invalid() {
     Command::cargo_bin("jfmt")
         .unwrap()

@@ -108,6 +108,35 @@ fn pretty_syntax_error_exits_2() {
 }
 
 #[test]
+fn pretty_ndjson_parallel_matches_serial() {
+    let serial = Command::cargo_bin("jfmt")
+        .unwrap()
+        .arg("--threads")
+        .arg("1")
+        .arg("pretty")
+        .arg("--ndjson")
+        .arg(fixture("ndjson-many.ndjson"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parallel = Command::cargo_bin("jfmt")
+        .unwrap()
+        .arg("--threads")
+        .arg("4")
+        .arg("pretty")
+        .arg("--ndjson")
+        .arg(fixture("ndjson-many.ndjson"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert_eq!(serial, parallel);
+}
+
+#[test]
 fn pretty_missing_file_exits_1() {
     Command::cargo_bin("jfmt")
         .unwrap()

@@ -33,6 +33,35 @@ fn minify_from_stdin_to_stdout() {
 }
 
 #[test]
+fn minify_ndjson_parallel_matches_serial() {
+    let serial = Command::cargo_bin("jfmt")
+        .unwrap()
+        .arg("--threads")
+        .arg("1")
+        .arg("minify")
+        .arg("--ndjson")
+        .arg(fixture("ndjson-many.ndjson"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parallel = Command::cargo_bin("jfmt")
+        .unwrap()
+        .arg("--threads")
+        .arg("4")
+        .arg("minify")
+        .arg("--ndjson")
+        .arg(fixture("ndjson-many.ndjson"))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert_eq!(serial, parallel);
+}
+
+#[test]
 fn minify_zstd_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let zst_out = dir.path().join("out.json.zst");
