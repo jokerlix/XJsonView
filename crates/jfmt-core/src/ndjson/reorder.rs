@@ -95,9 +95,14 @@ fn emit<W: Write>(
             out.write_all(b"\n")?;
         }
         Err(e) => {
-            errors.push((seq, e));
+            // Under fail_fast only the first error is surfaced;
+            // later errors from already-in-flight lines are discarded.
             if fail_fast {
-                cancel.store(true, Ordering::Relaxed);
+                if !cancel.swap(true, Ordering::Relaxed) {
+                    errors.push((seq, e));
+                }
+            } else {
+                errors.push((seq, e));
             }
         }
     }
