@@ -6,6 +6,7 @@
 pub mod error;
 pub mod escape;
 pub mod event;
+pub mod ndjson;
 pub mod parser;
 pub mod transcode;
 pub mod validate;
@@ -13,7 +14,8 @@ pub mod writer;
 
 pub use error::{Error, Result};
 pub use event::{Event, Scalar};
+pub use ndjson::{run_ndjson_pipeline, LineError, NdjsonPipelineOptions, PipelineReport};
 pub use parser::EventReader;
 pub use transcode::transcode;
-pub use validate::{validate_ndjson, validate_syntax, Stats, StatsCollector, StatsConfig};
+pub use validate::{validate_syntax, Stats, StatsCollector, StatsConfig};
 pub use writer::{EventWriter, MinifyWriter, PrettyConfig, PrettyWriter};
