@@ -8,3 +8,9 @@ license.workspace = true
 [[bin]]
 name = "jfmt"
 path = "src/main.rs"
+
+[dependencies]
+jfmt-core = { path = "../jfmt-core" }
+jfmt-io = { path = "../jfmt-io" }
+clap = { workspace = true }
+anyhow = { workspace = true }
