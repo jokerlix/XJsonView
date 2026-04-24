@@ -52,14 +52,19 @@ pub fn open_output(spec: &OutputSpec) -> io::Result<Box<dyn Write>> {
         None => Box::new(io::stdout().lock()),
     };
 
-    let compression = spec.compression.unwrap_or_else(|| match spec.path.as_deref() {
-        Some(p) => Compression::from_path(p),
-        None => Compression::None,
-    });
+    let compression = spec
+        .compression
+        .unwrap_or_else(|| match spec.path.as_deref() {
+            Some(p) => Compression::from_path(p),
+            None => Compression::None,
+        });
 
     let encoded: Box<dyn Write> = match compression {
         Compression::None => raw,
-        Compression::Gzip => Box::new(GzEncoder::new(raw, flate2::Compression::new(spec.gzip_level))),
+        Compression::Gzip => Box::new(GzEncoder::new(
+            raw,
+            flate2::Compression::new(spec.gzip_level),
+        )),
         Compression::Zstd => {
             Box::new(zstd::stream::Encoder::new(raw, spec.zstd_level)?.auto_finish())
         }

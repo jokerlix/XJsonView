@@ -30,10 +30,7 @@ mod tests {
         "#;
         let mut out = Vec::new();
         transcode(input.as_slice(), MinifyWriter::new(&mut out)).unwrap();
-        assert_eq!(
-            String::from_utf8(out).unwrap(),
-            r#"{"a":[1,2,3],"b":"hi"}"#
-        );
+        assert_eq!(String::from_utf8(out).unwrap(), r#"{"a":[1,2,3],"b":"hi"}"#);
     }
 
     #[test]

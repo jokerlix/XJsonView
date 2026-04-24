@@ -41,11 +41,26 @@ mod tests {
 
     #[test]
     fn detects_by_extension() {
-        assert_eq!(Compression::from_path(Path::new("a.json")), Compression::None);
-        assert_eq!(Compression::from_path(Path::new("a.JSON.gz")), Compression::Gzip);
-        assert_eq!(Compression::from_path(Path::new("a.json.zst")), Compression::Zstd);
-        assert_eq!(Compression::from_path(Path::new("a.json.ZSTD")), Compression::Zstd);
-        assert_eq!(Compression::from_path(Path::new("no_ext")), Compression::None);
+        assert_eq!(
+            Compression::from_path(Path::new("a.json")),
+            Compression::None
+        );
+        assert_eq!(
+            Compression::from_path(Path::new("a.JSON.gz")),
+            Compression::Gzip
+        );
+        assert_eq!(
+            Compression::from_path(Path::new("a.json.zst")),
+            Compression::Zstd
+        );
+        assert_eq!(
+            Compression::from_path(Path::new("a.json.ZSTD")),
+            Compression::Zstd
+        );
+        assert_eq!(
+            Compression::from_path(Path::new("no_ext")),
+            Compression::None
+        );
     }
 
     #[test]

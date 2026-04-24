@@ -293,10 +293,7 @@ mod tests {
             EndArray,
             EndObject,
         ]);
-        assert_eq!(
-            s,
-            "{\n  \"x\": [\n    {\n      \"y\": 1\n    }\n  ]\n}\n"
-        );
+        assert_eq!(s, "{\n  \"x\": [\n    {\n      \"y\": 1\n    }\n  ]\n}\n");
     }
 
     #[test]

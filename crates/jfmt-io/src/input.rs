@@ -35,10 +35,12 @@ pub fn open_input(spec: &InputSpec) -> io::Result<Box<dyn BufRead>> {
         None => Box::new(io::stdin().lock()),
     };
 
-    let compression = spec.compression.unwrap_or_else(|| match spec.path.as_deref() {
-        Some(p) => Compression::from_path(p),
-        None => Compression::None,
-    });
+    let compression = spec
+        .compression
+        .unwrap_or_else(|| match spec.path.as_deref() {
+            Some(p) => Compression::from_path(p),
+            None => Compression::None,
+        });
 
     let decoded: Box<dyn Read> = match compression {
         Compression::None => raw,
