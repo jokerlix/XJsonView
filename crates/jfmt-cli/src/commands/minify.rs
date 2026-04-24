@@ -1,8 +1,7 @@
 use crate::cli::MinifyArgs;
 use anyhow::Context;
 use jfmt_core::{
-    run_ndjson_pipeline, transcode, LineError, MinifyWriter, NdjsonPipelineOptions,
-    StatsCollector,
+    run_ndjson_pipeline, transcode, LineError, MinifyWriter, NdjsonPipelineOptions, StatsCollector,
 };
 
 pub fn run(args: MinifyArgs, threads: usize) -> anyhow::Result<()> {
@@ -41,8 +40,7 @@ pub fn run(args: MinifyArgs, threads: usize) -> anyhow::Result<()> {
                 },
             }
         };
-        let report =
-            run_ndjson_pipeline(input, output, closure, opts).context("minify failed")?;
+        let report = run_ndjson_pipeline(input, output, closure, opts).context("minify failed")?;
         for (seq, le) in &report.errors {
             eprintln!(
                 "line {seq}: syntax error at byte {}: {}",

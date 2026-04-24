@@ -21,16 +21,16 @@ where
 {
     let mut collector = StatsCollector::default();
     while let Ok((seq, bytes)) = rx.recv() {
-        let result =
-            match std::panic::catch_unwind(AssertUnwindSafe(|| f(&bytes, &mut collector))) {
-                Ok(r) => r,
-                Err(_) => Err(LineError {
-                    line: seq,
-                    offset: 0,
-                    column: None,
-                    message: "worker panic while processing line".into(),
-                }),
-            };
+        let result = match std::panic::catch_unwind(AssertUnwindSafe(|| f(&bytes, &mut collector)))
+        {
+            Ok(r) => r,
+            Err(_) => Err(LineError {
+                line: seq,
+                offset: 0,
+                column: None,
+                message: "worker panic while processing line".into(),
+            }),
+        };
         if tx.send((seq, result)).is_err() {
             break;
         }
@@ -70,9 +70,9 @@ mod tests {
         in_tx.send((42, b"trigger".to_vec())).unwrap();
         drop(in_tx);
 
-        let f = Arc::new(|_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
-            panic!("boom")
-        });
+        let f = Arc::new(
+            |_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> { panic!("boom") },
+        );
         run_worker(in_rx, out_tx, f);
         let items: Vec<_> = out_rx.iter().collect();
         assert_eq!(items.len(), 1);
@@ -90,14 +90,16 @@ mod tests {
         in_tx.send((7, b"x".to_vec())).unwrap();
         drop(in_tx);
 
-        let f = Arc::new(|_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
-            Err(LineError {
-                line: 7,
-                offset: 0,
-                column: None,
-                message: "nope".into(),
-            })
-        });
+        let f = Arc::new(
+            |_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+                Err(LineError {
+                    line: 7,
+                    offset: 0,
+                    column: None,
+                    message: "nope".into(),
+                })
+            },
+        );
         run_worker(in_rx, out_tx, f);
         let items: Vec<_> = out_rx.iter().collect();
         assert_eq!(items.len(), 1);

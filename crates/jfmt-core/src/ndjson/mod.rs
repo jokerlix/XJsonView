@@ -22,7 +22,7 @@ pub struct LineError {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct NdjsonPipelineOptions {
     /// Worker thread count. 0 = auto-detect via num_cpus physical cores.
     pub threads: usize,
@@ -34,17 +34,6 @@ pub struct NdjsonPipelineOptions {
     pub fail_fast: bool,
     /// If true, merge per-worker StatsCollectors into the report.
     pub collect_stats: bool,
-}
-
-impl Default for NdjsonPipelineOptions {
-    fn default() -> Self {
-        Self {
-            threads: 0,
-            channel_capacity: 0,
-            fail_fast: false,
-            collect_stats: false,
-        }
-    }
 }
 
 /// Aggregated outcome of a pipeline run.
@@ -73,10 +62,7 @@ pub fn run_ndjson_pipeline<R, W, F>(
 where
     R: Read + Send + 'static,
     W: Write + Send + 'static,
-    F: Fn(&[u8], &mut StatsCollector) -> Result<Vec<u8>, LineError>
-        + Send
-        + Sync
-        + 'static,
+    F: Fn(&[u8], &mut StatsCollector) -> Result<Vec<u8>, LineError> + Send + Sync + 'static,
 {
     use crate::ndjson::reorder::run_reorder;
     use crate::ndjson::splitter::split_lines;

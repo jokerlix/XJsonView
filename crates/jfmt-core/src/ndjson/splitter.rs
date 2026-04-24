@@ -70,8 +70,7 @@ mod tests {
         let (tx, rx) = crossbeam_channel::bounded(1);
         let input = b"1\n2\n3\n".to_vec();
         let cancel = Arc::new(AtomicBool::new(false));
-        let handle =
-            std::thread::spawn(move || split_lines(input.as_slice(), tx, cancel).unwrap());
+        let handle = std::thread::spawn(move || split_lines(input.as_slice(), tx, cancel).unwrap());
         let _ = rx.recv().unwrap();
         drop(rx);
         let count = handle.join().unwrap();

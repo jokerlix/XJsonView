@@ -2,9 +2,7 @@
 //! serial NDJSON unit tests.
 
 use jfmt_core::parser::EventReader;
-use jfmt_core::{
-    run_ndjson_pipeline, Error, LineError, NdjsonPipelineOptions, StatsCollector,
-};
+use jfmt_core::{run_ndjson_pipeline, Error, LineError, NdjsonPipelineOptions, StatsCollector};
 use std::io::{Cursor, Write};
 use std::sync::{Arc, Mutex};
 

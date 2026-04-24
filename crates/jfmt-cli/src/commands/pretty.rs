@@ -1,8 +1,8 @@
 use crate::cli::PrettyArgs;
 use anyhow::Context;
 use jfmt_core::{
-    run_ndjson_pipeline, transcode, LineError, NdjsonPipelineOptions, PrettyConfig,
-    PrettyWriter, StatsCollector,
+    run_ndjson_pipeline, transcode, LineError, NdjsonPipelineOptions, PrettyConfig, PrettyWriter,
+    StatsCollector,
 };
 
 pub fn run(args: PrettyArgs, threads: usize) -> anyhow::Result<()> {
