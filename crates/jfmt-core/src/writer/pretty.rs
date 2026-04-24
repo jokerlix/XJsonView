@@ -7,7 +7,7 @@ use crate::{Error, Result};
 use std::io::Write;
 
 /// Configuration for [`PrettyWriter`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct PrettyConfig {
     /// Number of spaces per indent level. Default 2.
     pub indent: u8,
