@@ -259,6 +259,7 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 
 | M1 ✓ | Shipped v0.0.1 on 2026-04-24 (tag `v0.0.1`) |
 | M2 ✓ | Shipped v0.0.2 on 2026-04-25 (tag `v0.0.2`) |
+| M3 ✓ | Shipped v0.0.3 on 2026-04-25 (tag `v0.0.3`) |
 
 **Total:** ~6–8 weeks full-time for v0.1.
 

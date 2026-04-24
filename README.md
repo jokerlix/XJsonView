@@ -5,8 +5,8 @@ with **constant memory** (O(nesting depth), not O(file size)).
 
 ## Status
 
-**M2 preview (v0.0.2)** — `pretty`, `minify`, `validate` subcommands
-over plain, gzip, and zstd JSON, plus streaming stats. See
+**M3 preview (v0.0.3)** — `pretty`, `minify`, `validate` with a
+multi-threaded NDJSON pipeline. See
 [`docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md`](docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md)
 for the Phase 1 roadmap (validation, filtering, NDJSON parallel pipeline
 coming in M2–M6).
@@ -57,6 +57,20 @@ jfmt validate events.ndjson --ndjson --fail-fast
 Stats include: record count (valid / invalid), top-level type distribution,
 max nesting depth, and top-level key frequencies (capped at 1024 distinct
 keys). JSON Schema validation lands in a later milestone.
+
+### Parallelism
+
+The `--ndjson` pipeline runs splitter → N workers → reorder on
+separate threads. Control with the global `--threads` flag:
+
+```bash
+jfmt --threads 8 pretty   --ndjson big.ndjson      # 8 workers
+jfmt --threads 1 validate --ndjson big.ndjson      # force serial
+jfmt minify --ndjson big.ndjson                    # default = physical cores
+```
+
+Output is always written in input order. `--threads` is silently
+ignored in single-document mode.
 
 ## Exit codes
 
