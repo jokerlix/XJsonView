@@ -3,6 +3,7 @@
 use crate::event::{Event, Scalar};
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// The JSON value-kind as reported by top-level type distribution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -52,6 +53,43 @@ pub struct Stats {
 
 fn is_zero_u64(n: &u64) -> bool {
     *n == 0
+}
+
+impl fmt::Display for Stats {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(
+            f,
+            "records: {} ({} valid, {} invalid)",
+            self.records, self.valid, self.invalid
+        )?;
+        writeln!(f, "max depth: {}", self.max_depth)?;
+
+        if !self.top_level_types.is_empty() {
+            writeln!(f, "top-level types:")?;
+            let mut types: Vec<_> = self.top_level_types.iter().collect();
+            types.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            for (k, v) in types {
+                writeln!(f, "  {k}: {v}")?;
+            }
+        }
+
+        if !self.top_level_keys.is_empty() {
+            writeln!(f, "top-level keys:")?;
+            let mut keys: Vec<_> = self.top_level_keys.iter().collect();
+            keys.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            for (k, v) in keys {
+                writeln!(f, "  {k}: {v}")?;
+            }
+            if self.top_level_keys_truncated > 0 {
+                writeln!(
+                    f,
+                    "  … {} distinct keys beyond cap dropped",
+                    self.top_level_keys_truncated
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -226,6 +264,40 @@ mod tests {
             serde_json::to_string(&ValueKind::Object).unwrap(),
             "\"object\""
         );
+    }
+
+    #[test]
+    fn display_format_is_stable() {
+        let mut s = Stats {
+            records: 2,
+            valid: 1,
+            invalid: 1,
+            max_depth: 3,
+            ..Default::default()
+        };
+        s.top_level_types.insert("object".into(), 2);
+        s.top_level_keys.insert("a".into(), 2);
+        s.top_level_keys.insert("b".into(), 1);
+
+        let text = format!("{s}");
+        assert!(
+            text.contains("records: 2 (1 valid, 1 invalid)"),
+            "got: {text}"
+        );
+        assert!(text.contains("max depth: 3"));
+        assert!(text.contains("top-level types:"));
+        assert!(text.contains("  object: 2"));
+        assert!(text.contains("top-level keys:"));
+        assert!(text.contains("  a: 2"));
+    }
+
+    #[test]
+    fn display_shows_truncated_note() {
+        let mut s = Stats::default();
+        s.top_level_keys.insert("a".into(), 1);
+        s.top_level_keys_truncated = 5;
+        let text = format!("{s}");
+        assert!(text.contains("5 distinct keys beyond cap dropped"), "got: {text}");
     }
 }
 
