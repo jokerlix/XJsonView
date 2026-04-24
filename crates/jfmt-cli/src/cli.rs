@@ -16,6 +16,8 @@ pub enum Command {
     Pretty(PrettyArgs),
     /// Minify a JSON document, removing all whitespace.
     Minify(MinifyArgs),
+    /// Validate JSON / NDJSON syntax and optionally emit stats.
+    Validate(ValidateArgs),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -73,6 +75,24 @@ pub struct PrettyArgs {
 pub struct MinifyArgs {
     #[command(flatten)]
     pub common: CommonArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct ValidateArgs {
+    #[command(flatten)]
+    pub common: CommonArgs,
+
+    /// Emit a human-readable stats summary to stderr.
+    #[arg(long = "stats")]
+    pub stats: bool,
+
+    /// Emit structured stats as JSON to PATH.
+    #[arg(long = "stats-json", value_name = "PATH")]
+    pub stats_json: Option<PathBuf>,
+
+    /// In NDJSON mode, stop at the first bad line.
+    #[arg(long = "fail-fast")]
+    pub fail_fast: bool,
 }
 
 impl CommonArgs {

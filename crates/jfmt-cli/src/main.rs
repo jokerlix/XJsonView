@@ -23,6 +23,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Pretty(args) => commands::pretty::run(args),
         Command::Minify(args) => commands::minify::run(args),
+        Command::Validate(_) => anyhow::bail!("validate: wiring lands in next task"),
     }
 }
 
