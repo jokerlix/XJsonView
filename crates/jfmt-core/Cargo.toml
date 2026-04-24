@@ -10,6 +10,8 @@ struson = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+crossbeam-channel = { workspace = true }
+num_cpus = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
