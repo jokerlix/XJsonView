@@ -180,6 +180,87 @@ fn stats_count_top_level_types_across_lines() {
 }
 
 #[test]
+fn parallel_output_matches_serial_byte_for_byte() {
+    let mut input = Vec::new();
+    for i in 0..1000u32 {
+        input.extend_from_slice(format!("{{\"i\":{i}}}\n").as_bytes());
+    }
+    let passthrough = |line: &[u8], c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+        c.begin_record();
+        c.end_record(true);
+        Ok(line.to_vec())
+    };
+
+    let buf1 = SharedBuf::new();
+    let buf8 = SharedBuf::new();
+    let report1 = run_ndjson_pipeline(
+        Cursor::new(input.clone()),
+        buf1.clone(),
+        passthrough,
+        NdjsonPipelineOptions {
+            threads: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let report8 = run_ndjson_pipeline(
+        Cursor::new(input.clone()),
+        buf8.clone(),
+        passthrough,
+        NdjsonPipelineOptions {
+            threads: 8,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(report1.records, 1000);
+    assert_eq!(report8.records, 1000);
+    assert_eq!(buf1.take(), buf8.take());
+}
+
+#[test]
+fn parallel_stats_match_serial_stats() {
+    let mut input = Vec::new();
+    input.extend_from_slice(b"{\"a\":1}\n");
+    input.extend_from_slice(b"{\"a\":2,\"b\":3}\n");
+    input.extend_from_slice(b"[1,2,3]\n");
+    input.extend_from_slice(b"\"hi\"\n");
+
+    let buf1 = SharedBuf::new();
+    let buf4 = SharedBuf::new();
+    let r1 = run_ndjson_pipeline(
+        Cursor::new(input.clone()),
+        buf1,
+        validate_closure,
+        NdjsonPipelineOptions {
+            threads: 1,
+            collect_stats: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let r4 = run_ndjson_pipeline(
+        Cursor::new(input.clone()),
+        buf4,
+        validate_closure,
+        NdjsonPipelineOptions {
+            threads: 4,
+            collect_stats: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let s1 = r1.stats.unwrap();
+    let s4 = r4.stats.unwrap();
+    assert_eq!(s1.records, s4.records);
+    assert_eq!(s1.valid, s4.valid);
+    assert_eq!(s1.invalid, s4.invalid);
+    assert_eq!(s1.top_level_types, s4.top_level_types);
+    assert_eq!(s1.top_level_keys, s4.top_level_keys);
+    assert_eq!(s1.max_depth, s4.max_depth);
+}
+
+#[test]
 fn detects_trailing_garbage_on_line() {
     let buf = SharedBuf::new();
     let input = Cursor::new(b"{\"a\":1} junk\n".to_vec());
