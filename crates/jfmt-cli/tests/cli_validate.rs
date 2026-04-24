@@ -40,9 +40,7 @@ fn validate_stats_to_stderr() {
         .arg(fixture("simple.json"))
         .assert()
         .success()
-        .stderr(predicate::str::contains(
-            "records: 1 (1 valid, 0 invalid)",
-        ))
+        .stderr(predicate::str::contains("records: 1 (1 valid, 0 invalid)"))
         .stderr(predicate::str::contains("top-level types:"))
         .stderr(predicate::str::contains("object: 1"));
 }
@@ -126,7 +124,5 @@ fn validate_ndjson_stats_counts_valid_and_invalid() {
         .arg(fixture("ndjson-mixed.ndjson"))
         .assert()
         .code(2)
-        .stderr(predicate::str::contains(
-            "records: 3 (2 valid, 1 invalid)",
-        ));
+        .stderr(predicate::str::contains("records: 3 (2 valid, 1 invalid)"));
 }

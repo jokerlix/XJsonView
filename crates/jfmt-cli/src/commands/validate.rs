@@ -23,10 +23,7 @@ pub fn run(args: ValidateArgs) -> Result<()> {
         .context("reading input")?;
 
         for le in &report.errors {
-            let col = le
-                .column
-                .map(|c| format!("col {c} "))
-                .unwrap_or_default();
+            let col = le.column.map(|c| format!("col {c} ")).unwrap_or_default();
             eprintln!(
                 "line {}: {}syntax error at byte {}: {}",
                 le.line, col, le.offset, le.message

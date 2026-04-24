@@ -32,10 +32,7 @@ pub struct NdjsonReport {
 
 /// Read `reader` line-by-line and validate each as its own JSON value.
 /// Empty / whitespace-only lines are skipped (no error, no stats contribution).
-pub fn validate_ndjson<R: Read>(
-    reader: R,
-    opts: NdjsonOptions,
-) -> std::io::Result<NdjsonReport> {
+pub fn validate_ndjson<R: Read>(reader: R, opts: NdjsonOptions) -> std::io::Result<NdjsonReport> {
     let br = BufReader::new(reader);
     let mut collector = opts.collect_stats.then(StatsCollector::default);
     let mut errors = Vec::new();

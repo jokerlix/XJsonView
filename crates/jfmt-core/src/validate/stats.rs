@@ -297,7 +297,10 @@ mod tests {
         s.top_level_keys.insert("a".into(), 1);
         s.top_level_keys_truncated = 5;
         let text = format!("{s}");
-        assert!(text.contains("5 distinct keys beyond cap dropped"), "got: {text}");
+        assert!(
+            text.contains("5 distinct keys beyond cap dropped"),
+            "got: {text}"
+        );
     }
 }
 
