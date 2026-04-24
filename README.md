@@ -5,8 +5,8 @@ with **constant memory** (O(nesting depth), not O(file size)).
 
 ## Status
 
-**M1 preview (v0.0.1)** — `pretty` and `minify` subcommands over plain,
-gzip, and zstd JSON. See
+**M2 preview (v0.0.2)** — `pretty`, `minify`, `validate` subcommands
+over plain, gzip, and zstd JSON, plus streaming stats. See
 [`docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md`](docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md)
 for the Phase 1 roadmap (validation, filtering, NDJSON parallel pipeline
 coming in M2–M6).
@@ -43,6 +43,20 @@ cat x.json | jfmt pretty                # stdin → stdout
 jfmt minify pretty.json -o small.json
 jfmt minify in.json.gz -o out.json.zst  # transcoding compression
 ```
+
+### Validate
+
+```bash
+jfmt validate data.json                        # exit 0 if clean, 2 if not
+jfmt validate data.json --stats                # human summary on stderr
+jfmt validate data.json --stats-json out.json  # machine-readable summary
+jfmt validate events.ndjson --ndjson           # per-line errors, keeps going
+jfmt validate events.ndjson --ndjson --fail-fast
+```
+
+Stats include: record count (valid / invalid), top-level type distribution,
+max nesting depth, and top-level key frequencies (capped at 1024 distinct
+keys). JSON Schema validation lands in a later milestone.
 
 ## Exit codes
 
