@@ -37,10 +37,11 @@ fn main() {
 }
 
 fn run(cli: Cli) -> anyhow::Result<()> {
+    let threads = cli.threads;
     match cli.command {
-        Command::Pretty(args) => commands::pretty::run(args),
-        Command::Minify(args) => commands::minify::run(args),
-        Command::Validate(args) => commands::validate::run(args),
+        Command::Pretty(args) => commands::pretty::run(args, threads),
+        Command::Minify(args) => commands::minify::run(args, threads),
+        Command::Validate(args) => commands::validate::run(args, threads),
     }
 }
 

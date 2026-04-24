@@ -6,6 +6,11 @@ use std::path::PathBuf;
 #[derive(Debug, Parser)]
 #[command(name = "jfmt", version, about = "Streaming JSON/NDJSON formatter")]
 pub struct Cli {
+    /// Worker threads for --ndjson pipelines. 0 = physical cores;
+    /// 1 = serial; >=2 = parallel. Ignored in single-document mode.
+    #[arg(long = "threads", global = true, default_value_t = 0)]
+    pub threads: usize,
+
     #[command(subcommand)]
     pub command: Command,
 }

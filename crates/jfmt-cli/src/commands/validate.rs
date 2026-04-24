@@ -3,30 +3,82 @@ use crate::exit::ExitCode;
 use crate::SilentExit;
 use anyhow::{Context, Result};
 use jfmt_core::parser::EventReader;
-use jfmt_core::validate::{validate_ndjson, NdjsonOptions};
-use jfmt_core::{validate_syntax, Stats, StatsCollector};
+use jfmt_core::{
+    run_ndjson_pipeline, validate_syntax, Error, LineError, NdjsonPipelineOptions, Stats,
+    StatsCollector,
+};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-pub fn run(args: ValidateArgs) -> Result<()> {
+pub fn run(args: ValidateArgs, threads: usize) -> Result<()> {
     let input = jfmt_io::open_input(&args.common.input_spec()).context("opening input")?;
     let collect_stats = args.stats || args.stats_json.is_some();
 
     let (any_bad, stats) = if args.common.ndjson {
-        let report = validate_ndjson(
-            input,
-            NdjsonOptions {
-                fail_fast: args.fail_fast,
-                collect_stats,
-            },
-        )
-        .context("reading input")?;
+        let sink = std::io::sink();
+        let opts = NdjsonPipelineOptions {
+            threads,
+            fail_fast: args.fail_fast,
+            collect_stats,
+            ..Default::default()
+        };
+        let closure = |line: &[u8], c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+            c.begin_record();
+            let mut p = EventReader::new(line);
+            loop {
+                match p.next_event() {
+                    Ok(None) => break,
+                    Ok(Some(ev)) => c.observe(&ev),
+                    Err(Error::Syntax {
+                        offset,
+                        column,
+                        message,
+                        ..
+                    }) => {
+                        c.end_record(false);
+                        return Err(LineError {
+                            line: 0,
+                            offset,
+                            column,
+                            message,
+                        });
+                    }
+                    Err(e) => {
+                        c.end_record(false);
+                        return Err(LineError {
+                            line: 0,
+                            offset: 0,
+                            column: None,
+                            message: format!("{e}"),
+                        });
+                    }
+                }
+            }
+            if let Err(Error::Syntax {
+                offset,
+                column,
+                message,
+                ..
+            }) = p.finish()
+            {
+                c.end_record(false);
+                return Err(LineError {
+                    line: 0,
+                    offset,
+                    column,
+                    message,
+                });
+            }
+            c.end_record(true);
+            Ok(Vec::new())
+        };
+        let report = run_ndjson_pipeline(input, sink, closure, opts).context("reading input")?;
 
-        for le in &report.errors {
+        for (seq, le) in &report.errors {
             let col = le.column.map(|c| format!("col {c} ")).unwrap_or_default();
             eprintln!(
-                "line {}: {}syntax error at byte {}: {}",
-                le.line, col, le.offset, le.message
+                "line {seq}: {}syntax error at byte {}: {}",
+                col, le.offset, le.message
             );
         }
         (!report.errors.is_empty(), report.stats)
@@ -68,7 +120,6 @@ pub fn run(args: ValidateArgs) -> Result<()> {
     }
 
     if any_bad {
-        // Per-line errors already went to stderr; just set the exit code.
         return Err(anyhow::Error::from(SilentExit(ExitCode::SyntaxError)));
     }
     Ok(())
