@@ -7,13 +7,30 @@ use cli::{Cli, Command};
 use exit::ExitCode;
 use std::process;
 
+/// Marker error: the subcommand has already written its own diagnostics to
+/// stderr; main should exit with the given code without printing anything.
+#[derive(Debug)]
+pub struct SilentExit(pub ExitCode);
+
+impl std::fmt::Display for SilentExit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "silent exit ({})", self.0.as_i32())
+    }
+}
+
+impl std::error::Error for SilentExit {}
+
 fn main() {
     let cli = Cli::parse();
     let code = match run(cli) {
         Ok(()) => ExitCode::Success,
         Err(e) => {
-            eprintln!("jfmt: {e:#}");
-            classify(&e)
+            if let Some(s) = e.downcast_ref::<SilentExit>() {
+                s.0
+            } else {
+                eprintln!("jfmt: {e:#}");
+                classify(&e)
+            }
         }
     };
     process::exit(code.as_i32());
@@ -23,7 +40,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Pretty(args) => commands::pretty::run(args),
         Command::Minify(args) => commands::minify::run(args),
-        Command::Validate(_) => anyhow::bail!("validate: wiring lands in next task"),
+        Command::Validate(args) => commands::validate::run(args),
     }
 }
 

@@ -2,6 +2,7 @@
 
 /// Exit code convention documented in the Phase 1 spec §4.3.
 #[repr(i32)]
+#[derive(Debug, Clone, Copy)]
 pub enum ExitCode {
     Success = 0,
     /// Generic I/O, file-not-found, bad argument.
