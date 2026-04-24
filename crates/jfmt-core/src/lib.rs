@@ -15,5 +15,5 @@ pub use error::{Error, Result};
 pub use event::{Event, Scalar};
 pub use parser::EventReader;
 pub use transcode::transcode;
-pub use validate::validate_syntax;
+pub use validate::{validate_ndjson, validate_syntax, Stats, StatsCollector, StatsConfig};
 pub use writer::{EventWriter, MinifyWriter, PrettyConfig, PrettyWriter};
