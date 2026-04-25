@@ -3,6 +3,7 @@
 //! M4a: `--materialize` mode (lands in M4b).
 
 pub mod compile;
+pub mod materialize;
 pub mod output;
 pub mod runtime;
 pub mod shard;
@@ -51,6 +52,17 @@ pub enum FilterError {
     )]
     OutputShape { where_: String, kind: &'static str },
 
+    /// Pre-flight RAM estimate exceeded the safety threshold and
+    /// `--force` was not passed.
+    #[error(
+        "estimated peak memory {estimate_bytes} bytes exceeds 80% of \
+         total RAM ({total_ram_bytes} bytes); rerun with --force to override"
+    )]
+    BudgetExceeded {
+        estimate_bytes: u64,
+        total_ram_bytes: u64,
+    },
+
     #[error("io: {0}")]
     Io(#[from] std::io::Error),
 
@@ -69,6 +81,7 @@ pub struct FilterOptions {
 }
 
 pub use compile::{compile, Compiled};
+pub use materialize::{run_materialize, MaterializeReport};
 pub use static_check::Mode;
 
 use crate::event::Event;
