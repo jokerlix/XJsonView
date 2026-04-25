@@ -197,10 +197,7 @@ mod tests {
 
     #[test]
     fn sort_by_works() {
-        let (out, _) = run(
-            "sort_by(.x) | .[].x",
-            r#"[{"x":3},{"x":1},{"x":2}]"#,
-        );
+        let (out, _) = run("sort_by(.x) | .[].x", r#"[{"x":3},{"x":1},{"x":2}]"#);
         assert_eq!(out, "1\n2\n3");
     }
 }

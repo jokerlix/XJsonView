@@ -34,8 +34,8 @@ pub fn run_one(compiled: &Compiled, input: Value) -> Result<Vec<Value>, FilterEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::filter::static_check::Mode;
     use crate::filter::compile;
+    use crate::filter::static_check::Mode;
     use serde_json::json;
 
     #[test]

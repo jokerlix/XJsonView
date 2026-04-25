@@ -1,7 +1,5 @@
 use jfmt_core::filter::static_check::Mode;
-use jfmt_core::filter::{
-    compile, run_materialize, FilterError, FilterOptions, FilterOutput,
-};
+use jfmt_core::filter::{compile, run_materialize, FilterError, FilterOptions, FilterOutput};
 use jfmt_core::PrettyConfig;
 
 fn run(expr: &str, input: &str) -> String {

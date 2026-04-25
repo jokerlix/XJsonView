@@ -66,8 +66,8 @@ pub fn run(args: FilterArgs, threads: usize) -> Result<()> {
     } else if args.common.ndjson {
         let input = jfmt_io::open_input(&input_spec).context("opening input")?;
         let output = jfmt_io::open_output(&args.common.output_spec()).context("opening output")?;
-        let report = run_ndjson(input, output, compiled, threads, opts)
-            .context("filter NDJSON pipeline")?;
+        let report =
+            run_ndjson(input, output, compiled, threads, opts).context("filter NDJSON pipeline")?;
         for (line, e) in &report.errors {
             eprintln!("error: line {line}: {}", e.message);
         }
