@@ -18,3 +18,9 @@ pub trait EventWriter {
     /// Flush underlying buffered state, if any.
     fn finish(&mut self) -> Result<()>;
 }
+
+/// Optional capability for tests / introspection: yield the
+/// underlying writer, consuming the wrapper.
+pub trait IntoInner<T> {
+    fn into_inner(self) -> T;
+}

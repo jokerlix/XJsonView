@@ -132,6 +132,12 @@ impl<W: Write> EventWriter for MinifyWriter<W> {
     }
 }
 
+impl<W: std::io::Write> crate::writer::IntoInner<W> for MinifyWriter<W> {
+    fn into_inner(self) -> W {
+        self.w
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

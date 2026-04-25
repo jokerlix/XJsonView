@@ -213,6 +213,12 @@ impl<W: Write> EventWriter for PrettyWriter<W> {
     }
 }
 
+impl<W: std::io::Write> crate::writer::IntoInner<W> for PrettyWriter<W> {
+    fn into_inner(self) -> W {
+        self.w
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
