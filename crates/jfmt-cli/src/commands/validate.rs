@@ -68,10 +68,13 @@ fn run_ndjson<R: std::io::Read + Send + 'static>(
     threads: usize,
     collect_stats: bool,
 ) -> Result<()> {
+    // If a schema is in play, force stats collection so schema_fail
+    // counts feed into the final exit code under --strict.
+    let need_stats = collect_stats || schema.is_some();
     let opts = NdjsonPipelineOptions {
         threads,
         fail_fast: args.fail_fast,
-        collect_stats,
+        collect_stats: need_stats,
         ..Default::default()
     };
     let schema_for_closure = schema; // moved into closure
