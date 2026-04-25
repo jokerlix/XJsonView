@@ -51,11 +51,11 @@ pub(crate) struct CompiledInner {
 /// 2. Re-parse via [`Loader::load`] to obtain [`load::Modules`].
 /// 3. Hand the modules to [`Compiler`] together with `jaq_std::funs()`
 ///    and `jaq_json::funs()` to obtain the runnable filter.
-pub fn compile(expr: &str) -> Result<Compiled, FilterError> {
+pub fn compile(expr: &str, mode: super::static_check::Mode) -> Result<Compiled, FilterError> {
     // (1) Lex + parse for the static-check pass. Mirrors the helper
     //     in `static_check.rs`'s tests.
     let term = parse_term(expr)?;
-    static_check::check(&term)?;
+    static_check::check(&term, mode)?;
 
     // (2) Re-parse via the higher-level Loader for the Compiler input.
     let arena = Arena::default();
@@ -112,29 +112,47 @@ fn format_compile_errors<E: std::fmt::Debug>(errs: &E) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filter::static_check::Mode;
     use crate::filter::FilterError;
 
     #[test]
     fn parse_error_reports_message() {
-        let err = compile("not a valid )(").unwrap_err();
+        let err = compile("not a valid )(", Mode::Streaming).unwrap_err();
         assert!(matches!(err, FilterError::Parse { .. }));
     }
 
     #[test]
-    fn aggregate_is_rejected_at_compile() {
-        match compile("length") {
+    fn aggregate_is_rejected_at_compile_in_streaming() {
+        match compile("length", Mode::Streaming) {
             Err(FilterError::Aggregate { name }) => assert_eq!(name, "length"),
             other => panic!("got {other:?}"),
         }
     }
 
     #[test]
-    fn legal_expression_compiles() {
-        compile("select(.x > 0)").expect("compile");
+    fn aggregate_is_accepted_in_materialize() {
+        compile("length", Mode::Materialize).expect("materialize accepts length");
     }
 
     #[test]
-    fn select_with_path_compiles() {
-        compile(".[] | select(.id > 100)").expect("compile");
+    fn multi_input_is_rejected_in_both_modes() {
+        match compile("input", Mode::Streaming) {
+            Err(FilterError::MultiInput { name }) => assert_eq!(name, "input"),
+            other => panic!("streaming: got {other:?}"),
+        }
+        match compile("input", Mode::Materialize) {
+            Err(FilterError::MultiInput { name }) => assert_eq!(name, "input"),
+            other => panic!("materialize: got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn legal_expression_compiles_in_streaming() {
+        compile("select(.x > 0)", Mode::Streaming).expect("compile");
+    }
+
+    #[test]
+    fn select_with_path_compiles_in_streaming() {
+        compile(".[] | select(.id > 100)", Mode::Streaming).expect("compile");
     }
 }

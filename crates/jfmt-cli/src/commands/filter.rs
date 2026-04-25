@@ -16,7 +16,8 @@ pub fn run(args: FilterArgs, threads: usize) -> Result<()> {
         return Err(anyhow::anyhow!("--pretty conflicts with --ndjson"));
     }
 
-    let compiled = compile(&args.expr).map_err(classify_compile_err)?;
+    let compiled =
+        compile(&args.expr, jfmt_core::filter::Mode::Streaming).map_err(classify_compile_err)?;
 
     let opts = FilterOptions {
         strict: args.strict,
@@ -66,7 +67,9 @@ pub fn run(args: FilterArgs, threads: usize) -> Result<()> {
 fn classify_compile_err(e: FilterError) -> anyhow::Error {
     eprintln!("jfmt: {e}");
     SilentExit(match &e {
-        FilterError::Aggregate { .. } | FilterError::Parse { .. } => ExitCode::SyntaxError,
+        FilterError::Aggregate { .. }
+        | FilterError::MultiInput { .. }
+        | FilterError::Parse { .. } => ExitCode::SyntaxError,
         _ => ExitCode::InputError,
     })
     .into()

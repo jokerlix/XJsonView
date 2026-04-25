@@ -1,4 +1,4 @@
-use jfmt_core::filter::{compile, run_ndjson, FilterOptions};
+use jfmt_core::filter::{compile, run_ndjson, FilterOptions, Mode};
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 
@@ -20,7 +20,7 @@ impl std::io::Write for SharedBuf {
 }
 
 fn run(expr: &str, input: &[u8], threads: usize, strict: bool) -> (String, usize) {
-    let compiled = compile(expr).unwrap();
+    let compiled = compile(expr, Mode::Streaming).unwrap();
     let buf = SharedBuf::new();
     let report = run_ndjson(
         Cursor::new(input.to_vec()),

@@ -1,7 +1,7 @@
-use jfmt_core::filter::{compile, run_streaming, FilterOptions, FilterOutput};
+use jfmt_core::filter::{compile, run_streaming, FilterOptions, FilterOutput, Mode};
 
 fn run(expr: &str, input: &str) -> (String, jfmt_core::filter::StreamingReport) {
-    let compiled = compile(expr).expect("compile");
+    let compiled = compile(expr, Mode::Streaming).expect("compile");
     let mut out = Vec::<u8>::new();
     let report = run_streaming(
         input.as_bytes(),
@@ -69,7 +69,7 @@ fn type_error_records_runtime_error_default() {
 
 #[test]
 fn type_error_strict_returns_err() {
-    let compiled = compile(".x + 1").unwrap();
+    let compiled = compile(".x + 1", Mode::Streaming).unwrap();
     let mut out = Vec::<u8>::new();
     let err = run_streaming(
         r#"[{"x":"hi"}]"#.as_bytes(),

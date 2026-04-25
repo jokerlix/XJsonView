@@ -34,33 +34,34 @@ pub fn run_one(compiled: &Compiled, input: Value) -> Result<Vec<Value>, FilterEr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filter::static_check::Mode;
     use crate::filter::compile;
     use serde_json::json;
 
     #[test]
     fn select_passing_returns_value() {
-        let c = compile("select(.x > 0)").unwrap();
+        let c = compile("select(.x > 0)", Mode::Streaming).unwrap();
         let out = run_one(&c, json!({"x": 1})).unwrap();
         assert_eq!(out, vec![json!({"x": 1})]);
     }
 
     #[test]
     fn select_failing_returns_empty() {
-        let c = compile("select(.x > 0)").unwrap();
+        let c = compile("select(.x > 0)", Mode::Streaming).unwrap();
         let out = run_one(&c, json!({"x": -1})).unwrap();
         assert!(out.is_empty());
     }
 
     #[test]
     fn comma_returns_two() {
-        let c = compile(".a, .b").unwrap();
+        let c = compile(".a, .b", Mode::Streaming).unwrap();
         let out = run_one(&c, json!({"a": 1, "b": 2})).unwrap();
         assert_eq!(out, vec![json!(1), json!(2)]);
     }
 
     #[test]
     fn type_error_reports_runtime() {
-        let c = compile(".x + 1").unwrap();
+        let c = compile(".x + 1", Mode::Streaming).unwrap();
         let err = run_one(&c, json!({"x": "string"})).unwrap_err();
         assert!(matches!(err, FilterError::Runtime { .. }));
     }

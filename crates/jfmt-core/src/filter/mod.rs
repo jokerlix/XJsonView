@@ -27,6 +27,16 @@ pub enum FilterError {
     )]
     Aggregate { name: String },
 
+    /// Static check rejected `input` / `inputs` (jaq multi-document
+    /// stream). jfmt does not support multi-document streams in any
+    /// mode (Phase 1 limitation); use `--ndjson` for per-line full
+    /// semantics.
+    #[error(
+        "filter expression uses '{name}'; jfmt does not support jq \
+         multi-document streams. Use --ndjson for per-line full semantics."
+    )]
+    MultiInput { name: String },
+
     /// jaq runtime error on one shard / line. `where_` carries the
     /// shard's line number (NDJSON) or array index / object key
     /// (single-document) for stderr reporting.
@@ -59,6 +69,7 @@ pub struct FilterOptions {
 }
 
 pub use compile::{compile, Compiled};
+pub use static_check::Mode;
 
 use crate::event::Event;
 use crate::parser::EventReader;

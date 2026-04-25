@@ -6,41 +6,49 @@
 //! AST scan. We lex the expression with [`jaq_core::load::lex::Lexer`]
 //! and parse it into a [`jaq_core::load::parse::Term`] via the public
 //! [`jaq_core::load::parse::Parser::term`] entry point, then recursively
-//! walk every sub-term. Any [`Term::Call(name, _)`] whose name appears
-//! in [`BLACKLIST`] is rejected with [`FilterError::Aggregate`]. We also
-//! reject the bare-word forms (jaq parses `length`, `add`, `input`,
-//! `inputs` as zero-arg calls, so they hit the same branch).
+//! walk every sub-term.
 //!
-//! AST scanning is preferred over source-text scanning because it
-//! ignores blacklisted names that appear inside string literals,
-//! comments, or as user-defined function names. Module body access in
-//! `jaq-core 2.2` is `pub(crate)`, so we cannot consume the result of
-//! [`Loader::load`] directly — but [`Parser::term`] is public and gives
-//! us the term AST for a single expression, which is exactly what
-//! `jfmt filter` accepts.
+//! # Two-group blacklist + Mode
 //!
-//! # Public API
+//! M4b splits the original single blacklist into two groups:
 //!
-//! [`check`] takes a parsed [`Term`] reference. Task 5 (`compile.rs`)
-//! lexes + parses with the same machinery and hands the resulting term
-//! to us.
+//! - [`AGGREGATE_NAMES`] — whole-document aggregates (`length`,
+//!   `sort_by`, `group_by`, `add`, `min`, `max`, `unique`, …).
+//!   Rejected only when the compiler is in [`Mode::Streaming`].
+//!   In [`Mode::Materialize`] these are legal because the entire
+//!   document is loaded into memory before evaluation.
+//! - [`MULTI_INPUT_NAMES`] — `input` / `inputs`, the jq multi-document
+//!   stream consumers. jfmt rejects these in **both** modes (Phase 1
+//!   limitation); the user-facing escape hatch is `--ndjson`.
+//!
+//! [`check`] takes a parsed [`Term`] reference and a [`Mode`].
+//! `compile()` lexes + parses with the same machinery and hands the
+//! resulting term to us.
 
 use jaq_core::load::lex::StrPart;
 use jaq_core::load::parse::{Pattern, Term};
 
 use super::FilterError;
 
-/// jq builtins that require whole-document semantics. Calling any of
-/// these on a single shard would yield wrong results, so we reject the
-/// expression at compile time. The static check is a fail-fast
-/// convenience; the runtime guard in Task 6 is the real safety net.
-const BLACKLIST: &[&str] = &[
+/// Which mode the filter compiler is operating in. Selects which
+/// blacklist groups apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// M4a streaming or NDJSON: aggregates AND multi-input both
+    /// rejected.
+    Streaming,
+    /// M4b `--materialize`: aggregates allowed, multi-input still
+    /// rejected.
+    Materialize,
+}
+
+/// jq builtins that need whole-document evaluation. Rejected only in
+/// [`Mode::Streaming`].
+const AGGREGATE_NAMES: &[&str] = &[
     "add",
     "all",
     "any",
     "group_by",
-    "input",
-    "inputs",
     "length",
     "max",
     "max_by",
@@ -52,40 +60,47 @@ const BLACKLIST: &[&str] = &[
     "unique_by",
 ];
 
-/// Walk `term` and return `Err(FilterError::Aggregate { name })` on the
-/// first blacklisted call we hit. The traversal is a depth-first
-/// pre-order walk; on the first hit we return immediately.
-pub fn check<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
-    walk(term)
+/// jq names that consume from a multi-document input stream. jfmt
+/// supports neither in any mode.
+const MULTI_INPUT_NAMES: &[&str] = &["input", "inputs"];
+
+/// Walk `term` under the given `mode` and reject the first
+/// blacklisted call we hit. Pre-order traversal; first hit returns.
+pub fn check<S: AsRef<str>>(term: &Term<S>, mode: Mode) -> Result<(), FilterError> {
+    walk(term, mode)
 }
 
-fn walk<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
+fn classify(name: &str, mode: Mode) -> Option<FilterError> {
+    if MULTI_INPUT_NAMES.contains(&name) {
+        return Some(FilterError::MultiInput {
+            name: name.to_string(),
+        });
+    }
+    if mode == Mode::Streaming && AGGREGATE_NAMES.contains(&name) {
+        return Some(FilterError::Aggregate {
+            name: name.to_string(),
+        });
+    }
+    None
+}
+
+fn walk<S: AsRef<str>>(term: &Term<S>, mode: Mode) -> Result<(), FilterError> {
     match term {
         Term::Id | Term::Recurse | Term::Num(_) | Term::Break(_) => Ok(()),
 
         Term::Var(name) => {
-            // jaq parses bare identifiers like `length` as `Call`, but
-            // `$x`-style variables come through `Var`. Variables can
-            // never name a builtin (they all start with `$`), so this
-            // is just for completeness.
-            let n = name.as_ref();
-            if BLACKLIST.contains(&n) {
-                return Err(FilterError::Aggregate {
-                    name: n.to_string(),
-                });
+            if let Some(err) = classify(name.as_ref(), mode) {
+                return Err(err);
             }
             Ok(())
         }
 
         Term::Call(name, args) => {
-            let n = name.as_ref();
-            if BLACKLIST.contains(&n) {
-                return Err(FilterError::Aggregate {
-                    name: n.to_string(),
-                });
+            if let Some(err) = classify(name.as_ref(), mode) {
+                return Err(err);
             }
             for a in args {
-                walk(a)?;
+                walk(a, mode)?;
             }
             Ok(())
         }
@@ -93,7 +108,7 @@ fn walk<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
         Term::Str(_, parts) => {
             for p in parts {
                 if let StrPart::Term(t) = p {
-                    walk(t)?;
+                    walk(t, mode)?;
                 }
             }
             Ok(())
@@ -101,91 +116,85 @@ fn walk<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
 
         Term::Arr(inner) => {
             if let Some(t) = inner {
-                walk(t)?;
+                walk(t, mode)?;
             }
             Ok(())
         }
 
         Term::Obj(entries) => {
             for (k, v) in entries {
-                walk(k)?;
+                walk(k, mode)?;
                 if let Some(v) = v {
-                    walk(v)?;
+                    walk(v, mode)?;
                 }
             }
             Ok(())
         }
 
-        Term::Neg(t) => walk(t),
+        Term::Neg(t) => walk(t, mode),
 
         Term::Pipe(l, pat, r) => {
-            walk(l)?;
+            walk(l, mode)?;
             if let Some(p) = pat {
-                walk_pattern(p)?;
+                walk_pattern(p, mode)?;
             }
-            walk(r)
+            walk(r, mode)
         }
 
         Term::BinOp(l, _, r) => {
-            walk(l)?;
-            walk(r)
+            walk(l, mode)?;
+            walk(r, mode)
         }
 
-        Term::Label(_, body) => walk(body),
+        Term::Label(_, body) => walk(body, mode),
 
         Term::Fold(_, init, pat, body) => {
-            walk(init)?;
-            walk_pattern(pat)?;
+            walk(init, mode)?;
+            walk_pattern(pat, mode)?;
             for t in body {
-                walk(t)?;
+                walk(t, mode)?;
             }
             Ok(())
         }
 
         Term::TryCatch(t, c) => {
-            walk(t)?;
+            walk(t, mode)?;
             if let Some(c) = c {
-                walk(c)?;
+                walk(c, mode)?;
             }
             Ok(())
         }
 
         Term::IfThenElse(branches, otherwise) => {
             for (cond, then) in branches {
-                walk(cond)?;
-                walk(then)?;
+                walk(cond, mode)?;
+                walk(then, mode)?;
             }
             if let Some(o) = otherwise {
-                walk(o)?;
+                walk(o, mode)?;
             }
             Ok(())
         }
 
         Term::Def(defs, body) => {
-            // We deliberately do NOT skip user-defined definitions
-            // even if they shadow a builtin: a user could write
-            // `def length: 0; length` — but our blacklist is on names,
-            // not on resolved bindings. False positives here are
-            // acceptable; a user shadowing a builtin name we reject
-            // is exotic and the workaround (rename) is trivial.
             for d in defs {
-                walk(&d.body)?;
+                walk(&d.body, mode)?;
             }
-            walk(body)
+            walk(body, mode)
         }
 
         Term::Path(head, path) => {
-            walk(head)?;
+            walk(head, mode)?;
             for (part, _opt) in &path.0 {
                 use jaq_core::path::Part;
                 match part {
-                    Part::Index(t) => walk(t)?,
+                    Part::Index(t) => walk(t, mode)?,
                     Part::Range(a, b) => {
                         if let Some(a) = a {
-                            walk(a)?;
+                            walk(a, mode)?;
                         }
                         if let Some(b) = b {
-                            walk(b)?;
+                            walk(b, mode)?;
                         }
                     }
                 }
@@ -195,19 +204,19 @@ fn walk<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
     }
 }
 
-fn walk_pattern<S: AsRef<str>>(pat: &Pattern<S>) -> Result<(), FilterError> {
+fn walk_pattern<S: AsRef<str>>(pat: &Pattern<S>, mode: Mode) -> Result<(), FilterError> {
     match pat {
         Pattern::Var(_) => Ok(()),
         Pattern::Arr(items) => {
             for p in items {
-                walk_pattern(p)?;
+                walk_pattern(p, mode)?;
             }
             Ok(())
         }
         Pattern::Obj(entries) => {
             for (k, p) in entries {
-                walk(k)?;
-                walk_pattern(p)?;
+                walk(k, mode)?;
+                walk_pattern(p, mode)?;
             }
             Ok(())
         }
@@ -221,8 +230,9 @@ mod tests {
     use jaq_core::load::lex::Lexer;
     use jaq_core::load::parse::Parser;
 
-    /// Lex + parse `expr` into a [`Term`] and run [`check`] on it.
-    fn scan_expr(expr: &str) -> Result<(), FilterError> {
+    /// Lex + parse `expr` into a `Term` and run `check` on it under
+    /// the given mode.
+    fn scan_expr(expr: &str, mode: Mode) -> Result<(), FilterError> {
         let tokens = Lexer::new(expr).lex().map_err(|errs| FilterError::Parse {
             msg: format!("{errs:?}"),
         })?;
@@ -232,79 +242,121 @@ mod tests {
                 .map_err(|errs| FilterError::Parse {
                     msg: format!("{errs:?}"),
                 })?;
-        check(&term)
+        check(&term, mode)
     }
 
     fn assert_aggregate(expr: &str, expected_name: &str) {
-        match scan_expr(expr) {
+        match scan_expr(expr, Mode::Streaming) {
             Err(FilterError::Aggregate { name }) => assert_eq!(name, expected_name),
             other => panic!("expected Aggregate({expected_name:?}), got {other:?}"),
         }
     }
 
-    fn assert_ok(expr: &str) {
-        scan_expr(expr).expect("expression must pass static check");
+    fn assert_multi_input(expr: &str, expected_name: &str, mode: Mode) {
+        match scan_expr(expr, mode) {
+            Err(FilterError::MultiInput { name }) => assert_eq!(name, expected_name),
+            other => panic!("expected MultiInput({expected_name:?}), got {other:?}"),
+        }
     }
 
+    fn assert_ok(expr: &str, mode: Mode) {
+        scan_expr(expr, mode).expect("expression must pass static check");
+    }
+
+    // ---- Streaming mode: M4a behaviour preserved ----
+
     #[test]
-    fn rejects_length() {
+    fn streaming_rejects_length() {
         assert_aggregate("length", "length");
     }
     #[test]
-    fn rejects_sort_by() {
+    fn streaming_rejects_sort_by() {
         assert_aggregate("sort_by(.x)", "sort_by");
     }
     #[test]
-    fn rejects_group_by() {
+    fn streaming_rejects_group_by() {
         assert_aggregate("group_by(.k)", "group_by");
     }
     #[test]
-    fn rejects_add() {
+    fn streaming_rejects_add() {
         assert_aggregate("add", "add");
     }
     #[test]
-    fn rejects_min() {
+    fn streaming_rejects_min() {
         assert_aggregate("min", "min");
     }
     #[test]
-    fn rejects_max() {
+    fn streaming_rejects_max() {
         assert_aggregate("max", "max");
     }
     #[test]
-    fn rejects_unique() {
+    fn streaming_rejects_unique() {
         assert_aggregate("unique", "unique");
     }
     #[test]
-    fn rejects_inputs() {
-        assert_aggregate("[inputs]", "inputs");
+    fn streaming_rejects_inputs() {
+        assert_multi_input("[inputs]", "inputs", Mode::Streaming);
     }
     #[test]
-    fn rejects_input() {
-        assert_aggregate("input", "input");
+    fn streaming_rejects_input() {
+        assert_multi_input("input", "input", Mode::Streaming);
     }
     #[test]
-    fn rejects_inside_pipe() {
+    fn streaming_rejects_inside_pipe() {
         assert_aggregate(".[] | length", "length");
     }
 
     #[test]
-    fn accepts_select() {
-        assert_ok("select(.x > 0)");
+    fn streaming_accepts_select() {
+        assert_ok("select(.x > 0)", Mode::Streaming);
     }
     #[test]
-    fn accepts_path_and_arithmetic() {
-        assert_ok(".a.b + 1");
+    fn streaming_accepts_path_and_arithmetic() {
+        assert_ok(".a.b + 1", Mode::Streaming);
     }
     #[test]
-    fn accepts_test_regex() {
-        assert_ok(r#"select(.url | test("^https://"))"#);
+    fn streaming_accepts_test_regex() {
+        assert_ok(r#"select(.url | test("^https://"))"#, Mode::Streaming);
     }
     #[test]
-    fn accepts_object_construction() {
-        assert_ok("{x: .x, y: .y}");
+    fn streaming_accepts_object_construction() {
+        assert_ok("{x: .x, y: .y}", Mode::Streaming);
     }
     #[test]
-    fn accepts_alternation() {
-        assert_ok(".a // \"default\"");
+    fn streaming_accepts_alternation() {
+        assert_ok(".a // \"default\"", Mode::Streaming);
+    }
+
+    // ---- Materialize mode: aggregates allowed, multi-input still rejected ----
+
+    #[test]
+    fn materialize_accepts_length() {
+        assert_ok("length", Mode::Materialize);
+    }
+    #[test]
+    fn materialize_accepts_sort_by() {
+        assert_ok("sort_by(.x)", Mode::Materialize);
+    }
+    #[test]
+    fn materialize_accepts_group_by() {
+        assert_ok("group_by(.k)", Mode::Materialize);
+    }
+    #[test]
+    fn materialize_accepts_add() {
+        assert_ok("add", Mode::Materialize);
+    }
+    #[test]
+    fn materialize_accepts_min_max_unique() {
+        assert_ok("min", Mode::Materialize);
+        assert_ok("max", Mode::Materialize);
+        assert_ok("unique", Mode::Materialize);
+    }
+    #[test]
+    fn materialize_rejects_input() {
+        assert_multi_input("input", "input", Mode::Materialize);
+    }
+    #[test]
+    fn materialize_rejects_inputs() {
+        assert_multi_input("[inputs]", "inputs", Mode::Materialize);
     }
 }
