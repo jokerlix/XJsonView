@@ -6,6 +6,7 @@
 pub mod error;
 pub mod escape;
 pub mod event;
+pub mod filter;
 pub mod ndjson;
 pub mod parser;
 pub mod transcode;
@@ -14,6 +15,7 @@ pub mod writer;
 
 pub use error::{Error, Result};
 pub use event::{Event, Scalar};
+pub use filter::{compile as compile_filter, Compiled, FilterError, FilterOptions};
 pub use ndjson::{run_ndjson_pipeline, LineError, NdjsonPipelineOptions, PipelineReport};
 pub use parser::EventReader;
 pub use transcode::transcode;
