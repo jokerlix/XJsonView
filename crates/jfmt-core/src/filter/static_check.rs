@@ -70,7 +70,9 @@ fn walk<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
             // is just for completeness.
             let n = name.as_ref();
             if BLACKLIST.contains(&n) {
-                return Err(FilterError::Aggregate { name: n.to_string() });
+                return Err(FilterError::Aggregate {
+                    name: n.to_string(),
+                });
             }
             Ok(())
         }
@@ -78,7 +80,9 @@ fn walk<S: AsRef<str>>(term: &Term<S>) -> Result<(), FilterError> {
         Term::Call(name, args) => {
             let n = name.as_ref();
             if BLACKLIST.contains(&n) {
-                return Err(FilterError::Aggregate { name: n.to_string() });
+                return Err(FilterError::Aggregate {
+                    name: n.to_string(),
+                });
             }
             for a in args {
                 walk(a)?;
@@ -219,12 +223,15 @@ mod tests {
 
     /// Lex + parse `expr` into a [`Term`] and run [`check`] on it.
     fn scan_expr(expr: &str) -> Result<(), FilterError> {
-        let tokens = Lexer::new(expr)
-            .lex()
-            .map_err(|errs| FilterError::Parse { msg: format!("{errs:?}") })?;
-        let term: Term<&str> = Parser::new(&tokens)
-            .parse(|p| p.term())
-            .map_err(|errs| FilterError::Parse { msg: format!("{errs:?}") })?;
+        let tokens = Lexer::new(expr).lex().map_err(|errs| FilterError::Parse {
+            msg: format!("{errs:?}"),
+        })?;
+        let term: Term<&str> =
+            Parser::new(&tokens)
+                .parse(|p| p.term())
+                .map_err(|errs| FilterError::Parse {
+                    msg: format!("{errs:?}"),
+                })?;
         check(&term)
     }
 
