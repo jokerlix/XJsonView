@@ -36,9 +36,9 @@ pub fn run(args: FilterArgs, threads: usize) -> Result<()> {
     if args.materialize {
         // RAM budget pre-flight (file inputs only; stdin returns None).
         if !args.force {
-            if let Some(estimate) = estimate_peak_ram_bytes(&input_spec) {
-                let total = system_total_ram_bytes();
-                if !budget_ok(estimate, total) {
+            if let Some(estimate) = super::ram_budget::estimate_peak_ram_bytes(&input_spec) {
+                let total = super::ram_budget::system_total_ram_bytes();
+                if !super::ram_budget::budget_ok(estimate, total) {
                     eprintln!(
                         "jfmt: estimated peak memory {} bytes exceeds 80% of total RAM ({} bytes); rerun with --force to override",
                         estimate, total
@@ -126,58 +126,3 @@ fn classify_runtime_err(e: FilterError, strict: bool) -> anyhow::Error {
     .into()
 }
 
-/// Estimate peak RAM for materializing `input`. Returns `None` when
-/// the input is stdin or its size can't be determined — callers
-/// interpret `None` as "skip the check" per spec D3.
-fn estimate_peak_ram_bytes(spec: &jfmt_io::InputSpec) -> Option<u64> {
-    let path = spec.path.as_ref()?;
-    let meta = std::fs::metadata(path).ok()?;
-    let on_disk = meta.len();
-    // Effective compression: explicit override, then file extension.
-    let compression = spec
-        .compression
-        .unwrap_or_else(|| jfmt_io::Compression::from_path(path));
-    let multiplier: u64 = match compression {
-        jfmt_io::Compression::None => 6,
-        jfmt_io::Compression::Gzip | jfmt_io::Compression::Zstd => 5 * 6, // 30
-    };
-    Some(on_disk.saturating_mul(multiplier))
-}
-
-/// Pure predicate: is `estimate` under 80% of `total_ram`?
-fn budget_ok(estimate: u64, total_ram: u64) -> bool {
-    // 80% = total_ram * 4 / 5. Compute as `total_ram / 5 * 4` to
-    // reduce overflow risk on very large `total_ram` values.
-    estimate < total_ram / 5 * 4
-}
-
-/// Query the actual system total RAM. Wraps sysinfo per spec Annex B.
-fn system_total_ram_bytes() -> u64 {
-    let mut sys = sysinfo::System::new();
-    sys.refresh_memory();
-    sys.total_memory()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::budget_ok;
-
-    #[test]
-    fn budget_ok_under_80_percent() {
-        // 1 GiB on a 2 GiB machine = 50% < 80% → ok.
-        assert!(budget_ok(1 << 30, 2u64 << 30));
-    }
-
-    #[test]
-    fn budget_not_ok_over_80_percent() {
-        // 1.7 GiB on a 2 GiB machine ≈ 85% → not ok.
-        let total = 2u64 << 30;
-        let estimate = total * 85 / 100;
-        assert!(!budget_ok(estimate, total));
-    }
-
-    #[test]
-    fn budget_ok_at_zero_estimate() {
-        assert!(budget_ok(0, 1 << 30));
-    }
-}
