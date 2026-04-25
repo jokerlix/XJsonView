@@ -23,6 +23,8 @@ pub enum Command {
     Minify(MinifyArgs),
     /// Validate JSON / NDJSON syntax and optionally emit stats.
     Validate(ValidateArgs),
+    /// Filter JSON / NDJSON with a jq expression.
+    Filter(FilterArgs),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -98,6 +100,32 @@ pub struct ValidateArgs {
     /// In NDJSON mode, stop at the first bad line.
     #[arg(long = "fail-fast")]
     pub fail_fast: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct FilterArgs {
+    /// jq expression (per-shard semantics; see `jfmt filter --help`).
+    #[arg(value_name = "EXPR")]
+    pub expr: String,
+
+    #[command(flatten)]
+    pub common: CommonArgs,
+
+    /// Promote runtime jq errors to fatal exit (code 1).
+    #[arg(long = "strict")]
+    pub strict: bool,
+
+    /// Pretty-print output. Conflicts with --compact and --ndjson.
+    #[arg(long = "pretty", conflicts_with = "compact")]
+    pub pretty: bool,
+
+    /// Compact output (default).
+    #[arg(long = "compact")]
+    pub compact: bool,
+
+    /// Indent width when --pretty is set.
+    #[arg(long = "indent", value_name = "N", default_value_t = 2, requires = "pretty")]
+    pub indent: u8,
 }
 
 impl CommonArgs {

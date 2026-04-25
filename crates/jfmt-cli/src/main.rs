@@ -42,12 +42,21 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Pretty(args) => commands::pretty::run(args, threads),
         Command::Minify(args) => commands::minify::run(args, threads),
         Command::Validate(args) => commands::validate::run(args, threads),
+        Command::Filter(args) => commands::filter::run(args, threads),
     }
 }
 
 fn classify(e: &anyhow::Error) -> ExitCode {
     if let Some(core_err) = e.downcast_ref::<jfmt_core::Error>() {
         if matches!(core_err, jfmt_core::Error::Syntax { .. }) {
+            return ExitCode::SyntaxError;
+        }
+    }
+    if let Some(filt) = e.downcast_ref::<jfmt_core::FilterError>() {
+        if matches!(
+            filt,
+            jfmt_core::FilterError::Parse { .. } | jfmt_core::FilterError::Aggregate { .. }
+        ) {
             return ExitCode::SyntaxError;
         }
     }
