@@ -153,3 +153,191 @@ fn validate_ndjson_stats_counts_valid_and_invalid() {
         .code(2)
         .stderr(predicate::str::contains("records: 3 (2 valid, 1 invalid)"));
 }
+
+// ===== M5 — JSON Schema =====
+
+fn jfmt() -> Command {
+    Command::cargo_bin("jfmt").unwrap()
+}
+
+#[test]
+fn schema_ndjson_default_continues_with_violations() {
+    jfmt()
+        .args([
+            "validate",
+            "--ndjson",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+            "tests/fixtures/schema_user_ndjson.ndjson",
+        ])
+        .assert()
+        .success() // exit 0 by default
+        .stderr(predicate::str::contains("schema:"));
+}
+
+#[test]
+fn schema_ndjson_strict_exits_3() {
+    jfmt()
+        .args([
+            "validate",
+            "--ndjson",
+            "--strict",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+            "tests/fixtures/schema_user_ndjson.ndjson",
+        ])
+        .assert()
+        .code(3);
+}
+
+#[test]
+fn schema_streaming_array_validates_each_element() {
+    jfmt()
+        .args([
+            "validate",
+            "--strict",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+            "tests/fixtures/schema_user_array.json",
+        ])
+        .assert()
+        .code(3) // 2 violations
+        .stderr(predicate::str::contains("element"));
+}
+
+#[test]
+fn schema_streaming_non_array_root_requires_materialize() {
+    jfmt()
+        .args([
+            "validate",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+        ])
+        .write_stdin(r#"{"name":"a"}"#)
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("--materialize"));
+}
+
+#[test]
+fn schema_materialize_whole_doc() {
+    jfmt()
+        .args([
+            "validate",
+            "-m",
+            "--strict",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+        ])
+        .write_stdin(r#"{"name":"a"}"#) // missing age
+        .assert()
+        .code(3)
+        .stderr(predicate::str::contains("required"));
+}
+
+#[test]
+fn schema_materialize_passes_on_good_input() {
+    jfmt()
+        .args([
+            "validate",
+            "-m",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+        ])
+        .write_stdin(r#"{"name":"a","age":1}"#)
+        .assert()
+        .success();
+}
+
+#[test]
+fn schema_fail_fast_aborts_at_first() {
+    jfmt()
+        .args([
+            "validate",
+            "--ndjson",
+            "--strict",
+            "--fail-fast",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+            "tests/fixtures/schema_user_ndjson.ndjson",
+        ])
+        .assert()
+        .code(3);
+}
+
+#[test]
+fn schema_file_missing_exits_1() {
+    jfmt()
+        .args(["validate", "--schema", "tests/fixtures/nonexistent.json"])
+        .write_stdin("[]")
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("schema"));
+}
+
+#[test]
+fn schema_file_invalid_json_exits_1() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = dir.path().join("bad.json");
+    std::fs::write(&bad, "not valid json").unwrap();
+    jfmt()
+        .args(["validate", "--schema"])
+        .arg(&bad)
+        .write_stdin("[]")
+        .assert()
+        .code(1);
+}
+
+#[test]
+fn schema_file_invalid_schema_exits_1() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = dir.path().join("bad-schema.json");
+    std::fs::write(&bad, r#"{"type":42}"#).unwrap();
+    jfmt()
+        .args(["validate", "--schema"])
+        .arg(&bad)
+        .write_stdin("[]")
+        .assert()
+        .code(1);
+}
+
+#[test]
+fn schema_stats_json_includes_schema_fields() {
+    let dir = tempfile::tempdir().unwrap();
+    let stats_path = dir.path().join("stats.json");
+    jfmt()
+        .args([
+            "validate",
+            "--ndjson",
+            "--schema",
+            "tests/fixtures/schema_user.json",
+            "--stats-json",
+        ])
+        .arg(&stats_path)
+        .arg("tests/fixtures/schema_user_ndjson.ndjson")
+        .assert()
+        .success();
+    let body = std::fs::read_to_string(&stats_path).unwrap();
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(v["schema_pass"].as_u64().unwrap() >= 1);
+    assert!(v["schema_fail"].as_u64().unwrap() >= 1);
+    assert!(v["top_violation_paths"].is_object());
+}
+
+#[test]
+fn validate_materialize_conflicts_with_ndjson() {
+    jfmt()
+        .args(["validate", "-m", "--ndjson"])
+        .write_stdin("[]")
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn validate_force_requires_materialize() {
+    jfmt()
+        .args(["validate", "--force"])
+        .write_stdin("[]")
+        .assert()
+        .code(2);
+}
