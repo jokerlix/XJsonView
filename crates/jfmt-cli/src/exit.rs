@@ -10,7 +10,7 @@ pub enum ExitCode {
     /// Malformed JSON input.
     SyntaxError = 2,
     /// JSON-Schema validation failure (reserved for M5).
-    _SchemaError = 3,
+    SchemaError = 3,
 }
 
 impl ExitCode {

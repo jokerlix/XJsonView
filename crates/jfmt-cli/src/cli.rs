@@ -100,6 +100,24 @@ pub struct ValidateArgs {
     /// In NDJSON mode, stop at the first bad line.
     #[arg(long = "fail-fast")]
     pub fail_fast: bool,
+
+    /// JSON Schema file to validate each record against.
+    #[arg(long = "schema", value_name = "FILE")]
+    pub schema: Option<std::path::PathBuf>,
+
+    /// Materialize the whole input and validate as a single value.
+    /// Conflicts with --ndjson.
+    #[arg(short = 'm', long = "materialize", conflicts_with = "ndjson")]
+    pub materialize: bool,
+
+    /// Skip the RAM budget pre-flight check. Requires --materialize.
+    #[arg(long = "force", requires = "materialize")]
+    pub force: bool,
+
+    /// Promote any failure (syntax or schema) to a non-zero exit code
+    /// without aborting the run. Syntax → exit 1; schema → exit 3.
+    #[arg(long = "strict")]
+    pub strict: bool,
 }
 
 #[derive(Debug, Args)]
