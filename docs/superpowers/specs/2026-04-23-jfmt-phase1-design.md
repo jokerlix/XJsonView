@@ -253,13 +253,15 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 | M1 | `jfmt pretty` / `minify`, single-thread, single-file | event parser/writer, CLI skeleton, I/O (gz/zst) | 1 week |
 | M2 | `jfmt validate` + stats | syntax errors with location, `StatsCollector` | 3–4 days |
 | M3 | NDJSON parallel pipeline | splitter / worker / reorder, backpressure, property tests | 1 week |
-| M4 | `jfmt filter` streaming + materialize | embed jaq, top-level shard driver, `--materialize`, static check | 1–2 weeks |
+| M4a | `jfmt filter` streaming + NDJSON | embed jaq, top-level shard driver, static check, runtime guard | 1 week |
+| M4b | `jfmt filter --materialize` | full-document jq semantics, memory budget check | 3–5 days |
 | M5 | JSON Schema support | `jsonschema` integration, path reporting, combined validation | 3–4 days |
 | M6 | Release polish | progress bar, `cargo-dist`, README, multi-platform CI | 1 week |
 
 | M1 ✓ | Shipped v0.0.1 on 2026-04-24 (tag `v0.0.1`) |
 | M2 ✓ | Shipped v0.0.2 on 2026-04-25 (tag `v0.0.2`) |
 | M3 ✓ | Shipped v0.0.3 on 2026-04-25 (tag `v0.0.3`) |
+| M4a ✓ | Shipped v0.0.4 on 2026-04-25 (tag `v0.0.4`) |
 
 **Total:** ~6–8 weeks full-time for v0.1.
 
