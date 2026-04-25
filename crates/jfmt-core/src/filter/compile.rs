@@ -29,8 +29,6 @@ use super::{static_check, FilterError};
 /// can be shared across NDJSON workers.
 #[derive(Clone)]
 pub struct Compiled {
-    // Read by `filter::runtime` (Task 6) once it lands.
-    #[allow(dead_code)]
     pub(crate) inner: Arc<CompiledInner>,
 }
 
@@ -42,8 +40,6 @@ impl std::fmt::Debug for Compiled {
 
 pub(crate) struct CompiledInner {
     /// The jaq filter — ready to run against [`jaq_json::Val`].
-    // Read by `filter::runtime` (Task 6) once it lands.
-    #[allow(dead_code)]
     pub(crate) filter: jaq_core::Filter<jaq_core::Native<jaq_json::Val>>,
 }
 
