@@ -173,3 +173,59 @@ fn run_streaming_inner<R: Read, W: EventWriter>(
     }
     Ok(report)
 }
+
+use crate::ndjson::{run_ndjson_pipeline, LineError, NdjsonPipelineOptions, PipelineReport};
+
+/// Drive an NDJSON parallel filter pipeline. Output is always compact
+/// (one JSON value per emitted line) regardless of FilterOutput.
+pub fn run_ndjson<R, W>(
+    input: R,
+    output: W,
+    compiled: Compiled,
+    threads: usize,
+    opts: FilterOptions,
+) -> std::io::Result<PipelineReport>
+where
+    R: std::io::Read + Send + 'static,
+    W: std::io::Write + Send + 'static,
+{
+    let f_opts = NdjsonPipelineOptions {
+        threads,
+        channel_capacity: 0,
+        fail_fast: opts.strict,
+        collect_stats: false,
+    };
+    run_ndjson_pipeline(
+        input,
+        output,
+        move |line, collector| {
+            collector.begin_record();
+            let v: serde_json::Value = serde_json::from_slice(line).map_err(|e| LineError {
+                line: 0,
+                offset: 0,
+                column: None,
+                message: format!("parse: {e}"),
+            })?;
+            let outputs = runtime::run_one(&compiled, v).map_err(|e| LineError {
+                line: 0,
+                offset: 0,
+                column: None,
+                message: format!("filter runtime: {e}"),
+            })?;
+            collector.end_record(true);
+            // Serialize each output as compact JSON (one per output line).
+            let mut parts = Vec::with_capacity(outputs.len());
+            for v in outputs {
+                let bytes = serde_json::to_vec(&v).map_err(|e| LineError {
+                    line: 0,
+                    offset: 0,
+                    column: None,
+                    message: format!("serialize: {e}"),
+                })?;
+                parts.push(bytes);
+            }
+            Ok(parts)
+        },
+        f_opts,
+    )
+}
