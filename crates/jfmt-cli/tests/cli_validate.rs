@@ -208,11 +208,7 @@ fn schema_streaming_array_validates_each_element() {
 #[test]
 fn schema_streaming_non_array_root_requires_materialize() {
     jfmt()
-        .args([
-            "validate",
-            "--schema",
-            "tests/fixtures/schema_user.json",
-        ])
+        .args(["validate", "--schema", "tests/fixtures/schema_user.json"])
         .write_stdin(r#"{"name":"a"}"#)
         .assert()
         .code(1)

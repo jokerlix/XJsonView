@@ -33,7 +33,10 @@ fn run_with_threads(threads: usize, input: &[u8]) -> (u64, u64) {
         };
         c.end_record(true);
         let violations = s_clone.validate(&value);
-        let paths: Vec<&str> = violations.iter().map(|v| v.instance_path.as_str()).collect();
+        let paths: Vec<&str> = violations
+            .iter()
+            .map(|v| v.instance_path.as_str())
+            .collect();
         c.record_schema_outcome(violations.is_empty(), &paths);
         Ok(vec![Vec::new()])
     };
@@ -42,8 +45,8 @@ fn run_with_threads(threads: usize, input: &[u8]) -> (u64, u64) {
         collect_stats: true,
         ..Default::default()
     };
-    let report = run_ndjson_pipeline(Cursor::new(input.to_vec()), std::io::sink(), closure, opts)
-        .unwrap();
+    let report =
+        run_ndjson_pipeline(Cursor::new(input.to_vec()), std::io::sink(), closure, opts).unwrap();
     let stats = report.stats.unwrap();
     (stats.schema_pass, stats.schema_fail)
 }

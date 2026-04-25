@@ -46,11 +46,10 @@ pub struct SchemaValidator {
 impl SchemaValidator {
     /// Compile a schema from a parsed `serde_json::Value`.
     pub fn compile(schema: &Value) -> Result<Self, SchemaError> {
-        let v = jsonschema::JSONSchema::compile(schema)
-            .map_err(|e| SchemaError::BadSchema { msg: format!("{e}") })?;
-        Ok(Self {
-            inner: Arc::new(v),
-        })
+        let v = jsonschema::JSONSchema::compile(schema).map_err(|e| SchemaError::BadSchema {
+            msg: format!("{e}"),
+        })?;
+        Ok(Self { inner: Arc::new(v) })
     }
 
     /// Validate one value. Returns 0..N violations.
@@ -135,7 +134,10 @@ mod tests {
         let v = SchemaValidator::compile(&user_schema()).unwrap();
         let value = json!({"name": "alice", "age": 30});
         let violations = v.validate(&value);
-        assert!(violations.is_empty(), "expected no violations: {violations:?}");
+        assert!(
+            violations.is_empty(),
+            "expected no violations: {violations:?}"
+        );
     }
 
     #[test]

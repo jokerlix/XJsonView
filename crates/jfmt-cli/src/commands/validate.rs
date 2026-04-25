@@ -138,8 +138,10 @@ fn run_ndjson<R: std::io::Read + Send + 'static>(
                 message: format!("post-syntax JSON re-parse failed: {e}"),
             })?;
             let violations = s.validate(&value);
-            let paths: Vec<&str> =
-                violations.iter().map(|v| v.instance_path.as_str()).collect();
+            let paths: Vec<&str> = violations
+                .iter()
+                .map(|v| v.instance_path.as_str())
+                .collect();
             c.record_schema_outcome(violations.is_empty(), &paths);
             if !violations.is_empty() {
                 // Encode violations as the "ok bytes" payload — the
@@ -149,11 +151,8 @@ fn run_ndjson<R: std::io::Read + Send + 'static>(
                 let mut parts = Vec::with_capacity(violations.len());
                 for v in &violations {
                     parts.push(
-                        format!(
-                            "schema: {}: {}: {}",
-                            v.instance_path, v.keyword, v.message
-                        )
-                        .into_bytes(),
+                        format!("schema: {}: {}: {}", v.instance_path, v.keyword, v.message)
+                            .into_bytes(),
                     );
                 }
                 return Ok(parts);
@@ -166,8 +165,8 @@ fn run_ndjson<R: std::io::Read + Send + 'static>(
     // a counter incremented per `\n`. This sits in place of the
     // /dev/null sink M2 used; reorder buffer guarantees in-order writes.
     let stderr_writer = StderrLineCounter::new();
-    let report = run_ndjson_pipeline(input, stderr_writer, closure, opts)
-        .context("reading input")?;
+    let report =
+        run_ndjson_pipeline(input, stderr_writer, closure, opts).context("reading input")?;
 
     for (seq, le) in &report.errors {
         let col = le.column.map(|c| format!("col {c} ")).unwrap_or_default();
@@ -288,12 +287,7 @@ fn run_streaming<R: std::io::Read>(
                                         v.instance_path, v.keyword, v.message
                                     );
                                     if args.fail_fast {
-                                        return finalise(
-                                            Some(c.finish()),
-                                            &args,
-                                            false,
-                                            true,
-                                        );
+                                        return finalise(Some(c.finish()), &args, false, true);
                                     }
                                 }
                             }
@@ -313,10 +307,7 @@ fn run_streaming<R: std::io::Read>(
             Ok(()) => {
                 c.end_record(true);
                 let stats = Some(c.finish());
-                let any_schema_bad = stats
-                    .as_ref()
-                    .map(|s| s.schema_fail > 0)
-                    .unwrap_or(false);
+                let any_schema_bad = stats.as_ref().map(|s| s.schema_fail > 0).unwrap_or(false);
                 finalise(stats, &args, false, any_schema_bad)
             }
             Err(e) => {
@@ -355,10 +346,7 @@ fn run_materialize<R: std::io::Read>(
         let violations = s.validate(&value);
         any_schema_bad = !violations.is_empty();
         for v in &violations {
-            eprintln!(
-                "(root): {}: {}: {}",
-                v.instance_path, v.keyword, v.message
-            );
+            eprintln!("(root): {}: {}: {}", v.instance_path, v.keyword, v.message);
             if args.fail_fast {
                 break;
             }
