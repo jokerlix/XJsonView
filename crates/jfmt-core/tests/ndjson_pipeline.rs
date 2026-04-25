@@ -28,7 +28,10 @@ impl Write for SharedBuf {
     }
 }
 
-fn validate_closure(line: &[u8], collector: &mut StatsCollector) -> Result<Vec<u8>, LineError> {
+fn validate_closure(
+    line: &[u8],
+    collector: &mut StatsCollector,
+) -> Result<Vec<Vec<u8>>, LineError> {
     collector.begin_record();
     let mut p = EventReader::new(line);
     loop {
@@ -76,7 +79,7 @@ fn validate_closure(line: &[u8], collector: &mut StatsCollector) -> Result<Vec<u
         });
     }
     collector.end_record(true);
-    Ok(Vec::new())
+    Ok(vec![Vec::new()])
 }
 
 #[test]
@@ -183,10 +186,10 @@ fn parallel_output_matches_serial_byte_for_byte() {
     for i in 0..1000u32 {
         input.extend_from_slice(format!("{{\"i\":{i}}}\n").as_bytes());
     }
-    let passthrough = |line: &[u8], c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+    let passthrough = |line: &[u8], c: &mut StatsCollector| -> Result<Vec<Vec<u8>>, LineError> {
         c.begin_record();
         c.end_record(true);
-        Ok(line.to_vec())
+        Ok(vec![line.to_vec()])
     };
 
     let buf1 = SharedBuf::new();

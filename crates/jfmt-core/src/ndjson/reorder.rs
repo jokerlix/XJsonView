@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// the smallest seq first. The payload's ordering is never used.
 struct Entry {
     seq: u64,
-    payload: Result<Vec<u8>, LineError>,
+    payload: Result<Vec<Vec<u8>>, LineError>,
 }
 
 impl PartialEq for Entry {
@@ -87,12 +87,14 @@ fn emit<W: Write>(
     cancel: &Arc<AtomicBool>,
     fail_fast: bool,
     seq: u64,
-    payload: Result<Vec<u8>, LineError>,
+    payload: Result<Vec<Vec<u8>>, LineError>,
 ) -> std::io::Result<()> {
     match payload {
-        Ok(bytes) => {
-            out.write_all(&bytes)?;
-            out.write_all(b"\n")?;
+        Ok(parts) => {
+            for bytes in &parts {
+                out.write_all(bytes)?;
+                out.write_all(b"\n")?;
+            }
         }
         Err(e) => {
             // Under fail_fast only the first error is surfaced;
@@ -117,9 +119,9 @@ mod tests {
     #[test]
     fn emits_output_in_seq_order_even_when_input_is_scrambled() {
         let (tx, rx) = unbounded::<WorkerOutput>();
-        tx.send((3, Ok(b"C".to_vec()))).unwrap();
-        tx.send((1, Ok(b"A".to_vec()))).unwrap();
-        tx.send((2, Ok(b"B".to_vec()))).unwrap();
+        tx.send((3, Ok(vec![b"C".to_vec()]))).unwrap();
+        tx.send((1, Ok(vec![b"A".to_vec()]))).unwrap();
+        tx.send((2, Ok(vec![b"B".to_vec()]))).unwrap();
         drop(tx);
 
         let mut out = Vec::new();
@@ -143,8 +145,8 @@ mod tests {
             }),
         ))
         .unwrap();
-        tx.send((1, Ok(b"ok1".to_vec()))).unwrap();
-        tx.send((3, Ok(b"ok3".to_vec()))).unwrap();
+        tx.send((1, Ok(vec![b"ok1".to_vec()]))).unwrap();
+        tx.send((3, Ok(vec![b"ok3".to_vec()]))).unwrap();
         drop(tx);
 
         let mut out = Vec::new();
@@ -159,7 +161,7 @@ mod tests {
     #[test]
     fn fail_fast_raises_cancel_and_still_drains() {
         let (tx, rx) = unbounded::<WorkerOutput>();
-        tx.send((1, Ok(b"ok1".to_vec()))).unwrap();
+        tx.send((1, Ok(vec![b"ok1".to_vec()]))).unwrap();
         tx.send((
             2,
             Err(LineError {
@@ -170,7 +172,7 @@ mod tests {
             }),
         ))
         .unwrap();
-        tx.send((3, Ok(b"ok3".to_vec()))).unwrap();
+        tx.send((3, Ok(vec![b"ok3".to_vec()]))).unwrap();
         drop(tx);
 
         let mut out = Vec::new();
@@ -184,8 +186,8 @@ mod tests {
     #[test]
     fn handles_seq_gaps_from_skipped_blank_lines() {
         let (tx, rx) = unbounded::<WorkerOutput>();
-        tx.send((1, Ok(b"A".to_vec()))).unwrap();
-        tx.send((3, Ok(b"C".to_vec()))).unwrap();
+        tx.send((1, Ok(vec![b"A".to_vec()]))).unwrap();
+        tx.send((3, Ok(vec![b"C".to_vec()]))).unwrap();
         drop(tx);
 
         let mut out = Vec::new();

@@ -22,37 +22,38 @@ pub fn run(args: PrettyArgs, threads: usize) -> anyhow::Result<()> {
             ..Default::default()
         };
         let cfg_for_closure = cfg;
-        let closure = move |line: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
-            let mut out = Vec::with_capacity(line.len() * 2);
-            let writer = PrettyWriter::with_config(&mut out, cfg_for_closure);
-            match transcode(line, writer) {
-                Ok(()) => {
-                    if out.ends_with(b"\n") {
-                        out.pop();
+        let closure =
+            move |line: &[u8], _c: &mut StatsCollector| -> Result<Vec<Vec<u8>>, LineError> {
+                let mut out = Vec::with_capacity(line.len() * 2);
+                let writer = PrettyWriter::with_config(&mut out, cfg_for_closure);
+                match transcode(line, writer) {
+                    Ok(()) => {
+                        if out.ends_with(b"\n") {
+                            out.pop();
+                        }
+                        Ok(vec![out])
                     }
-                    Ok(out)
+                    Err(e) => match e {
+                        jfmt_core::Error::Syntax {
+                            offset,
+                            column,
+                            message,
+                            ..
+                        } => Err(LineError {
+                            line: 0,
+                            offset,
+                            column,
+                            message,
+                        }),
+                        other => Err(LineError {
+                            line: 0,
+                            offset: 0,
+                            column: None,
+                            message: format!("{other}"),
+                        }),
+                    },
                 }
-                Err(e) => match e {
-                    jfmt_core::Error::Syntax {
-                        offset,
-                        column,
-                        message,
-                        ..
-                    } => Err(LineError {
-                        line: 0,
-                        offset,
-                        column,
-                        message,
-                    }),
-                    other => Err(LineError {
-                        line: 0,
-                        offset: 0,
-                        column: None,
-                        message: format!("{other}"),
-                    }),
-                },
-            }
-        };
+            };
         let report =
             run_ndjson_pipeline(input, output, closure, opts).context("pretty-printing failed")?;
         for (seq, le) in &report.errors {

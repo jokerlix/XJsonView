@@ -22,7 +22,7 @@ pub fn run(args: ValidateArgs, threads: usize) -> Result<()> {
             collect_stats,
             ..Default::default()
         };
-        let closure = |line: &[u8], c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+        let closure = |line: &[u8], c: &mut StatsCollector| -> Result<Vec<Vec<u8>>, LineError> {
             c.begin_record();
             let mut p = EventReader::new(line);
             loop {
@@ -70,7 +70,7 @@ pub fn run(args: ValidateArgs, threads: usize) -> Result<()> {
                 });
             }
             c.end_record(true);
-            Ok(Vec::new())
+            Ok(vec![Vec::new()])
         };
         let report = run_ndjson_pipeline(input, sink, closure, opts).context("reading input")?;
 

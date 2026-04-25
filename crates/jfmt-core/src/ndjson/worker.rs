@@ -8,7 +8,7 @@ use crossbeam_channel::{Receiver, Sender};
 use std::panic::AssertUnwindSafe;
 
 /// One unit of completed work sent to the reorder stage.
-pub type WorkerOutput = (u64, Result<Vec<u8>, LineError>);
+pub type WorkerOutput = (u64, Result<Vec<Vec<u8>>, LineError>);
 
 /// Run one worker loop. Returns the collector so the caller can merge it.
 pub fn run_worker<F>(
@@ -17,7 +17,7 @@ pub fn run_worker<F>(
     f: std::sync::Arc<F>,
 ) -> StatsCollector
 where
-    F: Fn(&[u8], &mut StatsCollector) -> Result<Vec<u8>, LineError> + Send + Sync + 'static,
+    F: Fn(&[u8], &mut StatsCollector) -> Result<Vec<Vec<u8>>, LineError> + Send + Sync + 'static,
 {
     let mut collector = StatsCollector::default();
     while let Ok((seq, bytes)) = rx.recv() {
@@ -53,13 +53,13 @@ mod tests {
         drop(in_tx);
 
         let f = Arc::new(|bytes: &[u8], _c: &mut StatsCollector| {
-            Ok::<_, LineError>(bytes.to_ascii_uppercase())
+            Ok::<_, LineError>(vec![bytes.to_ascii_uppercase()])
         });
         run_worker(in_rx, out_tx, f);
         let collected: Vec<_> = out_rx.iter().collect();
         assert_eq!(
             collected,
-            vec![(1, Ok(b"HI".to_vec())), (2, Ok(b"!!".to_vec())),]
+            vec![(1, Ok(vec![b"HI".to_vec()])), (2, Ok(vec![b"!!".to_vec()])),]
         );
     }
 
@@ -71,7 +71,9 @@ mod tests {
         drop(in_tx);
 
         let f = Arc::new(
-            |_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> { panic!("boom") },
+            |_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<Vec<u8>>, LineError> {
+                panic!("boom")
+            },
         );
         run_worker(in_rx, out_tx, f);
         let items: Vec<_> = out_rx.iter().collect();
@@ -91,7 +93,7 @@ mod tests {
         drop(in_tx);
 
         let f = Arc::new(
-            |_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+            |_b: &[u8], _c: &mut StatsCollector| -> Result<Vec<Vec<u8>>, LineError> {
                 Err(LineError {
                     line: 7,
                     offset: 0,

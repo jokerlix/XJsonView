@@ -14,11 +14,11 @@ pub fn run(args: MinifyArgs, threads: usize) -> anyhow::Result<()> {
             collect_stats: false,
             ..Default::default()
         };
-        let closure = |line: &[u8], _c: &mut StatsCollector| -> Result<Vec<u8>, LineError> {
+        let closure = |line: &[u8], _c: &mut StatsCollector| -> Result<Vec<Vec<u8>>, LineError> {
             let mut out = Vec::with_capacity(line.len());
             let writer = MinifyWriter::new(&mut out);
             match transcode(line, writer) {
-                Ok(()) => Ok(out),
+                Ok(()) => Ok(vec![out]),
                 Err(e) => match e {
                     jfmt_core::Error::Syntax {
                         offset,

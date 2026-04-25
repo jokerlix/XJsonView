@@ -62,7 +62,7 @@ pub fn run_ndjson_pipeline<R, W, F>(
 where
     R: Read + Send + 'static,
     W: Write + Send + 'static,
-    F: Fn(&[u8], &mut StatsCollector) -> Result<Vec<u8>, LineError> + Send + Sync + 'static,
+    F: Fn(&[u8], &mut StatsCollector) -> Result<Vec<Vec<u8>>, LineError> + Send + Sync + 'static,
 {
     use crate::ndjson::reorder::run_reorder;
     use crate::ndjson::splitter::split_lines;
@@ -169,7 +169,7 @@ mod tests {
                 collector.begin_record();
                 let out = line.to_ascii_uppercase();
                 collector.end_record(true);
-                Ok(out)
+                Ok(vec![out])
             },
             NdjsonPipelineOptions {
                 threads: 1,
