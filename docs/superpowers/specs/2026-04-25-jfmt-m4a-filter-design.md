@@ -307,3 +307,32 @@ In each `filter/<file>.rs`:
 - README updated with a `filter` section pointing to the streaming-mode hint
   and the `--materialize` deferral notice.
 - Phase 1 spec marked: M4a shipped as `v0.0.4`; M4b still pending.
+
+## Annex A — jaq API mapping (frozen by Task 1 spike)
+
+- Versions: `jaq-core = "=2.2.1"`, `jaq-std = "=2.1.2"`, `jaq-json = "=1.1.3"`
+  (with feature `serde_json`). The 3.x line is unusable on MSRV 1.75: it
+  pulls `indexmap >= 2.10` and `wit-bindgen >= 0.57` transitively, both of
+  which require `cargo edition2024`. The 2.x line works once `indexmap` is
+  pinned to `2.7.0` in the lockfile (Cargo's MSRV-aware resolver does this
+  automatically because we declared `rust-version = "1.75"`, but a `cargo
+  update -p indexmap --precise 2.7.0` may be required when bumping deps).
+  No `jaq-syn` / `jaq-parse` crate is used in the 2.x line — parsing lives
+  inside `jaq_core::load`.
+- Value type: `jaq_json::Val` (with `From<serde_json::Value>` and
+  `From<Val> for serde_json::Value` behind the `serde_json` feature).
+- Parse + load: `jaq_core::load::Loader::new(defs).load(&arena, File { path: (), code: expr })`
+  where `arena: jaq_core::load::Arena`, `defs:
+  jaq_std::defs().chain(jaq_json::defs())` returns
+  `impl Iterator<Item = jaq_core::load::parse::Def<&'static str>>`.
+- Compile: `jaq_core::Compiler::default().with_funs(jaq_std::funs().chain(jaq_json::funs())).compile(modules)`
+  yields `jaq_core::Filter<jaq_core::Native<jaq_json::Val>>`.
+- Run: `Filter::run(cv) -> impl Iterator<Item = jaq_json::ValR>` where
+  `cv: (jaq_core::Ctx<'a, Val>, Val)` and
+  `ValR = Result<Val, jaq_json::Error>`.
+- Empty inputs iterator (when the filter does not consume `inputs`):
+  `let inputs: jaq_core::RcIter<core::iter::Empty<Result<Val, _>>> =
+  jaq_core::RcIter::new(core::iter::empty());` then
+  `Ctx::new([], &inputs)`.
+
+Subsequent tasks depend on these exact symbol paths.

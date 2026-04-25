@@ -12,6 +12,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 crossbeam-channel = { workspace = true }
 num_cpus = { workspace = true }
+jaq-core = { workspace = true }
+jaq-std = { workspace = true }
+jaq-json = { workspace = true, features = ["serde_json"] }
 
 [dev-dependencies]
 proptest = { workspace = true }
