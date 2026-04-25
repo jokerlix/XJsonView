@@ -49,6 +49,17 @@ pub struct Stats {
     /// Number of distinct keys dropped once the key cap was hit.
     #[serde(skip_serializing_if = "is_zero_u64")]
     pub top_level_keys_truncated: u64,
+    /// Number of records that passed schema validation. Only non-zero
+    /// when `--schema` was used.
+    #[serde(skip_serializing_if = "is_zero_u64")]
+    pub schema_pass: u64,
+    /// Number of records that failed schema validation.
+    #[serde(skip_serializing_if = "is_zero_u64")]
+    pub schema_fail: u64,
+    /// Top-N most frequent violated JSON Pointer paths (capped via
+    /// `StatsConfig::top_violation_paths_cap`).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub top_violation_paths: BTreeMap<String, u64>,
 }
 
 fn is_zero_u64(n: &u64) -> bool {
@@ -74,6 +85,11 @@ impl Stats {
             *self.top_level_keys.entry(k).or_insert(0) += v;
         }
         self.top_level_keys_truncated += other.top_level_keys_truncated;
+        self.schema_pass += other.schema_pass;
+        self.schema_fail += other.schema_fail;
+        for (k, v) in other.top_violation_paths {
+            *self.top_violation_paths.entry(k).or_insert(0) += v;
+        }
     }
 }
 
@@ -110,6 +126,21 @@ impl fmt::Display for Stats {
                 )?;
             }
         }
+        if self.schema_pass + self.schema_fail > 0 {
+            writeln!(
+                f,
+                "schema:    pass={}  fail={}",
+                self.schema_pass, self.schema_fail
+            )?;
+        }
+        if !self.top_violation_paths.is_empty() {
+            writeln!(f, "top violation paths:")?;
+            let mut paths: Vec<_> = self.top_violation_paths.iter().collect();
+            paths.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            for (k, v) in paths {
+                writeln!(f, "  {k}   {v}")?;
+            }
+        }
         Ok(())
     }
 }
@@ -119,12 +150,17 @@ pub struct StatsConfig {
     /// Maximum distinct top-level object keys to remember. Once hit, further
     /// new keys are counted in `top_level_keys_truncated` and discarded.
     pub top_level_keys_cap: usize,
+    /// Maximum distinct violated JSON Pointer paths to retain. Once
+    /// hit, paths with the lowest counts are evicted on each
+    /// subsequent insert. Default 10.
+    pub top_violation_paths_cap: usize,
 }
 
 impl Default for StatsConfig {
     fn default() -> Self {
         Self {
             top_level_keys_cap: 1024,
+            top_violation_paths_cap: 10,
         }
     }
 }
@@ -226,6 +262,42 @@ impl StatsCollector {
             }
             Event::Value(_) => {
                 self.expecting_name_at_depth_1 = self.depth == 1 && self.in_top_level_object;
+            }
+        }
+    }
+
+    /// Record one record's schema-validation outcome. `paths` are the
+    /// JSON Pointer paths of the violations (empty when `passed`).
+    pub fn record_schema_outcome(&mut self, passed: bool, paths: &[&str]) {
+        if passed {
+            self.stats.schema_pass += 1;
+        } else {
+            self.stats.schema_fail += 1;
+        }
+        for p in paths {
+            *self
+                .stats
+                .top_violation_paths
+                .entry((*p).to_string())
+                .or_insert(0) += 1;
+        }
+        // Enforce cap by evicting lowest-frequency entries until we
+        // are at or below cap. Stable tie-break by key (lex-largest
+        // gets evicted first so we keep alphabetically-earlier names).
+        let cap = self.cfg.top_violation_paths_cap;
+        if cap > 0 {
+            while self.stats.top_violation_paths.len() > cap {
+                let evict = self
+                    .stats
+                    .top_violation_paths
+                    .iter()
+                    .min_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+                    .map(|(k, _)| k.clone());
+                if let Some(k) = evict {
+                    self.stats.top_violation_paths.remove(&k);
+                } else {
+                    break;
+                }
             }
         }
     }
@@ -365,6 +437,83 @@ mod tests {
             "got: {text}"
         );
     }
+
+    #[test]
+    fn record_schema_outcome_pass_increments_schema_pass() {
+        let mut c = StatsCollector::default();
+        c.record_schema_outcome(true, &[]);
+        let s = c.finish();
+        assert_eq!(s.schema_pass, 1);
+        assert_eq!(s.schema_fail, 0);
+        assert!(s.top_violation_paths.is_empty());
+    }
+
+    #[test]
+    fn record_schema_outcome_fail_increments_paths() {
+        let mut c = StatsCollector::default();
+        c.record_schema_outcome(false, &["/x", "/y/z"]);
+        let s = c.finish();
+        assert_eq!(s.schema_pass, 0);
+        assert_eq!(s.schema_fail, 1);
+        assert_eq!(s.top_violation_paths.get("/x"), Some(&1));
+        assert_eq!(s.top_violation_paths.get("/y/z"), Some(&1));
+    }
+
+    #[test]
+    fn record_schema_outcome_paths_accumulate() {
+        let mut c = StatsCollector::default();
+        c.record_schema_outcome(false, &["/x"]);
+        c.record_schema_outcome(false, &["/x", "/y"]);
+        c.record_schema_outcome(false, &["/x"]);
+        let s = c.finish();
+        assert_eq!(s.schema_fail, 3);
+        assert_eq!(s.top_violation_paths.get("/x"), Some(&3));
+        assert_eq!(s.top_violation_paths.get("/y"), Some(&1));
+    }
+
+    #[test]
+    fn top_violation_paths_cap_drops_least_frequent() {
+        let cfg = StatsConfig {
+            top_violation_paths_cap: 2,
+            ..StatsConfig::default()
+        };
+        let mut c = StatsCollector::new(cfg);
+        // /a hit 3 times, /b hit 2 times, /c hit 1 time. Cap is 2 so /c gets dropped.
+        for _ in 0..3 {
+            c.record_schema_outcome(false, &["/a"]);
+        }
+        for _ in 0..2 {
+            c.record_schema_outcome(false, &["/b"]);
+        }
+        c.record_schema_outcome(false, &["/c"]);
+        let s = c.finish();
+        assert_eq!(s.top_violation_paths.len(), 2);
+        assert!(s.top_violation_paths.contains_key("/a"));
+        assert!(s.top_violation_paths.contains_key("/b"));
+        assert!(!s.top_violation_paths.contains_key("/c"));
+    }
+
+    #[test]
+    fn merge_combines_schema_fields() {
+        let mut a = Stats {
+            schema_pass: 5,
+            schema_fail: 2,
+            ..Default::default()
+        };
+        a.top_violation_paths.insert("/x".into(), 2);
+        let mut b = Stats {
+            schema_pass: 3,
+            schema_fail: 4,
+            ..Default::default()
+        };
+        b.top_violation_paths.insert("/x".into(), 1);
+        b.top_violation_paths.insert("/y".into(), 3);
+        a.merge(b);
+        assert_eq!(a.schema_pass, 8);
+        assert_eq!(a.schema_fail, 6);
+        assert_eq!(a.top_violation_paths.get("/x"), Some(&3));
+        assert_eq!(a.top_violation_paths.get("/y"), Some(&3));
+    }
 }
 
 #[cfg(test)]
@@ -425,6 +574,7 @@ mod collector_tests {
     fn key_cap_truncates() {
         let mut c = StatsCollector::new(StatsConfig {
             top_level_keys_cap: 2,
+            ..StatsConfig::default()
         });
         c.begin_record();
         c.observe(&Event::StartObject);
