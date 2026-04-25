@@ -124,7 +124,12 @@ pub struct FilterArgs {
     pub compact: bool,
 
     /// Indent width when --pretty is set.
-    #[arg(long = "indent", value_name = "N", default_value_t = 2, requires = "pretty")]
+    #[arg(
+        long = "indent",
+        value_name = "N",
+        default_value_t = 2,
+        requires = "pretty"
+    )]
     pub indent: u8,
 }
 

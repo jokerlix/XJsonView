@@ -25,8 +25,8 @@ pub fn run(args: FilterArgs, threads: usize) -> Result<()> {
 
     if args.common.ndjson {
         let output = jfmt_io::open_output(&args.common.output_spec()).context("opening output")?;
-        let report = run_ndjson(input, output, compiled, threads, opts)
-            .context("filter NDJSON pipeline")?;
+        let report =
+            run_ndjson(input, output, compiled, threads, opts).context("filter NDJSON pipeline")?;
         for (line, e) in &report.errors {
             eprintln!("error: line {line}: {}", e.message);
         }
@@ -36,9 +36,7 @@ pub fn run(args: FilterArgs, threads: usize) -> Result<()> {
         Ok(())
     } else {
         if !HINT_PRINTED.swap(true, Ordering::Relaxed) {
-            eprintln!(
-                "note: streaming mode evaluates your expression once per top-level element."
-            );
+            eprintln!("note: streaming mode evaluates your expression once per top-level element.");
             eprintln!(
                 "      write '.id' not '.[].id'  (use --ndjson for full per-line jq semantics)"
             );

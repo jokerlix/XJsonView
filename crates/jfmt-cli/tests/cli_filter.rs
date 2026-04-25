@@ -15,7 +15,11 @@ fn jfmt() -> Command {
 #[test]
 fn streaming_array_select() {
     jfmt()
-        .args(["filter", "select(.x > 1)", fixture("filter_array.json").to_str().unwrap()])
+        .args([
+            "filter",
+            "select(.x > 1)",
+            fixture("filter_array.json").to_str().unwrap(),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains(r#""x":2"#))
@@ -37,9 +41,11 @@ fn ndjson_select_skips_lines() {
         ])
         .assert()
         .success()
-        .stdout(r#"{"i":1,"level":"error"}
+        .stdout(
+            r#"{"i":1,"level":"error"}
 {"i":3,"level":"error"}
-"#);
+"#,
+        );
 }
 
 #[test]
@@ -65,10 +71,7 @@ fn aggregate_fails_with_exit_2() {
         .assert()
         .code(2)
         .stderr(predicate::str::contains("length"))
-        .stderr(
-            predicate::str::contains("--ndjson")
-                .or(predicate::str::contains("--materialize")),
-        );
+        .stderr(predicate::str::contains("--ndjson").or(predicate::str::contains("--materialize")));
 }
 
 #[test]

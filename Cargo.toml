@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-cli"]
 
 [workspace.package]
-version = "0.0.3"
+version = "0.0.4"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT OR Apache-2.0"

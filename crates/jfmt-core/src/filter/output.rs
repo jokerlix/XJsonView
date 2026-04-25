@@ -172,7 +172,10 @@ mod tests {
     #[test]
     fn object_n_outputs_errors() {
         let err = shape(TopLevel::Object, &[(&[json!(1), json!(2)], Some("a"))]).unwrap_err();
-        assert!(matches!(err, FilterError::OutputShape { kind: "object", .. }));
+        assert!(matches!(
+            err,
+            FilterError::OutputShape { kind: "object", .. }
+        ));
     }
 
     #[test]
@@ -184,6 +187,9 @@ mod tests {
     #[test]
     fn scalar_n_outputs_errors() {
         let err = shape(TopLevel::Scalar, &[(&[json!(1), json!(2)], None)]).unwrap_err();
-        assert!(matches!(err, FilterError::OutputShape { kind: "scalar", .. }));
+        assert!(matches!(
+            err,
+            FilterError::OutputShape { kind: "scalar", .. }
+        ));
     }
 }
