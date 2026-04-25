@@ -248,3 +248,14 @@ clap relations:
 - README updated with a `### Filter — full jq mode` subsection (or
   inline addendum to the existing `### Filter` block).
 - Phase 1 spec marked: M4b shipped as `v0.0.5`.
+
+## Annex B — sysinfo API mapping (frozen by Task 1 spike)
+
+- Version: sysinfo=0.30.13.
+- Constructor: `sysinfo::System::new()`.
+- Refresh: `sys.refresh_memory()` (required before reading totals).
+- Total RAM: `sys.total_memory() -> u64` returning bytes.
+- Unit: bytes.
+
+The `cli/commands/filter.rs::system_total_ram_bytes()` helper calls
+this exact sequence.

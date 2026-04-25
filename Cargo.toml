@@ -38,6 +38,8 @@ num_cpus = "=1.16.0"
 jaq-core = "=2.2.1"
 jaq-std = "=2.1.2"
 jaq-json = "=1.1.3"
+# RAM budget check for `jfmt filter --materialize` (M4b).
+sysinfo = "=0.30.13"
 
 [profile.release]
 lto = "thin"

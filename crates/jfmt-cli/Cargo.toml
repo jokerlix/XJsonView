@@ -15,6 +15,7 @@ jfmt-io = { path = "../jfmt-io" }
 clap = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
+sysinfo = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
