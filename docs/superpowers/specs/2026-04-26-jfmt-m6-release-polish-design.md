@@ -387,3 +387,11 @@ adds no new runtime behaviour, so any regression is a packaging mistake.
 - `git tag v0.1.0` exists and `git push --tags` succeeds.
 - GitHub Release page for `v0.1.0` shows 5 tarballs, 2 installers,
   and a checksum file (manual verification).
+
+## Annex D — criterion + transitive pins (frozen by Task 1 spike)
+
+- Version: criterion=0.5.1.
+- Transitive precise pins required: `half=2.4.1` (later half releases
+  require rustc 1.81+; pinned via
+  `cargo update half --precise 2.4.1`).
+- MSRV 1.75 confirmed by `cargo run --example criterion_spike`.
