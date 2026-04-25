@@ -363,3 +363,35 @@ top violation paths:
   `top_violation_paths` when schema validation runs.
 - README updated with a `### Validate — JSON Schema` block.
 - Phase 1 spec marked: M5 shipped as `v0.0.6`.
+
+## Annex C — jsonschema API mapping (frozen by Task 1 spike)
+
+- Version: jsonschema=0.18.3.
+- Compile: `jsonschema::JSONSchema::compile(&serde_json::Value) -> Result<jsonschema::JSONSchema, jsonschema::ValidationError<'static>>`.
+- Validate: `jsonschema::JSONSchema::validate(&self, &'instance serde_json::Value) -> Result<(), jsonschema::ErrorIterator<'instance>>`
+  where `ErrorIterator<'a> = Box<dyn Iterator<Item = ValidationError<'a>> + Sync + Send + 'a>`.
+  Fast-path boolean check: `JSONSchema::is_valid(&self, &serde_json::Value) -> bool`.
+- Error type: `jsonschema::ValidationError<'a>` — public fields:
+  - `instance_path: jsonschema::paths::JSONPointer` (renders to JSON Pointer via `Display`/`to_string()`),
+  - `schema_path: jsonschema::paths::JSONPointer`,
+  - `kind: jsonschema::error::ValidationErrorKind` (variant name = keyword/category, e.g. `Type`, `Required`, `MinLength`),
+  - `instance: std::borrow::Cow<'a, serde_json::Value>`.
+  `Display` impl on `ValidationError` yields the human message used for `--stats-json` reporting.
+- Send + Sync on `JSONSchema`: confirmed by 4-thread `Arc::clone` smoke test in spike (run 2026-04-25 on rustc 1.75.0).
+
+The `validate/schema.rs::SchemaValidator` wraps these symbols.
+
+### Transitive precise pins required for MSRV 1.75
+
+`jsonschema 0.18.3` pulls `url 2.5.8 → idna 1.1.0 → idna_adapter 1.2.1`, whose
+default-features path resolves to `icu_*` 2.x crates that require rustc ≥ 1.86.
+The following `cargo update --precise` pins were added to `Cargo.lock` to keep
+the build green on rustc 1.75:
+
+- `idna_adapter = 1.2.0` (forces icu 1.x family instead of 2.x)
+- `uuid = 1.10.0` (1.23.x needs rustc 1.85)
+- `time = 0.3.36` + `deranged = 0.3.11` (0.3.44 / 0.5.x need rustc 1.85)
+- `litemap = 0.7.4` + `zerofrom = 0.1.5` (0.7.5 / 0.1.7 need rustc 1.81)
+
+Cargo.lock is committed, so these pins persist. Bumping `jsonschema` later
+will require re-evaluating this list.

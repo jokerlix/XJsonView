@@ -15,6 +15,7 @@ num_cpus = { workspace = true }
 jaq-core = { workspace = true }
 jaq-std = { workspace = true }
 jaq-json = { workspace = true, features = ["serde_json"] }
+jsonschema = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
