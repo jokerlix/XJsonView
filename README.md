@@ -5,10 +5,9 @@ with **constant memory** (O(nesting depth), not O(file size)).
 
 ## Status
 
-**M4a preview (v0.0.4)** — `pretty`, `minify`, `validate`, `filter`
-(jq expression, streaming + NDJSON parallel, embedded jaq with
-static-check + runtime guard). `--materialize` mode (`-m`) for
-full-document jq semantics is deferred to M4b. See
+**M4b preview (v0.0.5)** — `pretty`, `minify`, `validate`, and
+`filter` (streaming + NDJSON parallel + `--materialize` for full-jq
+semantics with RAM budget pre-flight). See
 [`docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md`](docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md)
 for the Phase 1 roadmap.
 
@@ -85,8 +84,32 @@ Streaming-mode rules:
 - Top-level object → output object (drop key on 0 outputs; multi-output is an error).
 - Top-level scalar → 0 or 1 output (multi-output is an error).
 - Aggregate jq builtins (`length`, `sort_by`, `group_by`, `add`, `min`, `max`, `unique`, …) are
-  rejected at compile time. Use `--ndjson` for per-line full semantics, or wait for `--materialize`
-  in M4b.
+  rejected at compile time. Use `--ndjson` for per-line full semantics, or `--materialize` for
+  full-document semantics.
+
+**Full-jq mode (`-m` / `--materialize`):**
+
+```bash
+# Allows aggregates: length, sort_by, group_by, add, min, max, unique
+jfmt filter -m 'sort_by(.x)' file.json
+jfmt filter -m 'length' file.json
+jfmt filter -m '.[]' file.json   # multi-value stream output
+
+# Override the RAM budget check (file_size * 6, file_size * 30 if compressed)
+jfmt filter -m --force 'sort_by(.x)' big.json
+```
+
+`-m` loads the entire input into memory and runs the jq expression
+with full semantics. For file inputs, jfmt estimates peak memory and
+aborts unless `--force` is set or the estimate is under 80 % of total
+RAM. stdin input skips the check (the `-m` flag itself is the user's
+"I have enough memory" promise). `-m` and `--ndjson` are mutually
+exclusive.
+
+Multiple jq output values are emitted as a JSON-value stream
+(separated by `\n`, or `\n\n` with `--pretty`). No trailing newline,
+matching jfmt's `pretty` / `minify` output. This intentionally
+differs from `jq -c`'s trailing newline.
 
 Object output keys are emitted in alphabetical order (jaq round-trip
 through `serde_json::Map` does not preserve insertion order). Use
