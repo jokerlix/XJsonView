@@ -5,10 +5,10 @@ with **constant memory** (O(nesting depth), not O(file size)).
 
 ## Status
 
-**M4b preview (v0.0.5)** — `pretty`, `minify`, `validate`, and
-`filter` (streaming + NDJSON parallel + `--materialize` for full-jq
-semantics with RAM budget pre-flight). See
-[`docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md`](docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md)
+**M5 preview (v0.0.6)** — `pretty`, `minify`, `validate` (with
+JSON Schema, `--strict`, `--materialize`, NDJSON parallel + per-element
+streaming), and `filter` (streaming + NDJSON parallel + `--materialize`).
+See [`docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md`](docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md)
 for the Phase 1 roadmap.
 
 ## Install
@@ -57,6 +57,52 @@ jfmt validate events.ndjson --ndjson --fail-fast
 Stats include: record count (valid / invalid), top-level type distribution,
 max nesting depth, and top-level key frequencies (capped at 1024 distinct
 keys). JSON Schema validation lands in a later milestone.
+
+### Validate — JSON Schema
+
+```bash
+# NDJSON: validate each line against the schema, report violations
+jfmt validate --ndjson --schema schema.json data.ndjson
+
+# Streaming top-level array: validate each element
+jfmt validate --schema schema.json users.json
+
+# Whole-document validation (e.g., to use `minItems` / `required` at root)
+jfmt validate -m --schema schema.json config.json
+
+# Strict CI mode: any failure exits non-zero
+jfmt validate --ndjson --strict --schema schema.json events.ndjson
+echo $?  # 3 if any record violated the schema
+```
+
+`--schema FILE` runs alongside the existing syntax validation. Mode +
+top-level form decides what gets validated:
+
+- `--ndjson` → each line is one record, validated independently.
+- Default streaming + top-level array → each element validated
+  (constant memory).
+- Default streaming + top-level object/scalar → error; pass
+  `--materialize` or `--ndjson`.
+- `--materialize` (`-m`) → whole document validated as one value.
+  Triggers a RAM budget pre-flight (file_size × 6, × 30 if compressed,
+  abort unless `--force` when over 80 % RAM).
+
+Violations stream to stderr immediately as they occur (TB-safe; no
+unbounded accumulation). The schema's draft is auto-detected from
+its `$schema` keyword (Draft 4 / 6 / 7 / 2019-09 / 2020-12).
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| 0 | success (or non-strict run with reported violations) |
+| 1 | I/O failure, bad schema file, or non-array-root + `--schema` without `-m` |
+| 2 | syntax error or clap usage error |
+| 3 | schema violation under `--strict` |
+
+Stats output (`--stats` / `--stats-json`) gains `schema_pass`,
+`schema_fail`, and `top_violation_paths` (top 10 most-frequent
+violated JSON Pointer paths).
 
 ### Filter
 
