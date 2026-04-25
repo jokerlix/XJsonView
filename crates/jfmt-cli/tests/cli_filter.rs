@@ -151,3 +151,103 @@ fn pretty_with_ndjson_is_rejected() {
         .assert()
         .failure();
 }
+
+// ===== M4b — --materialize =====
+
+#[test]
+fn materialize_length_returns_count() {
+    jfmt()
+        .args([
+            "filter",
+            "-m",
+            "length",
+            "tests/fixtures/filter_materialize_array.json",
+        ])
+        .assert()
+        .success()
+        .stdout("3");
+}
+
+#[test]
+fn materialize_sort_by_returns_sorted() {
+    jfmt()
+        .args([
+            "filter",
+            "-m",
+            "sort_by(.x) | .[].x",
+            "tests/fixtures/filter_materialize_array.json",
+        ])
+        .assert()
+        .success()
+        .stdout("1\n2\n3");
+}
+
+#[test]
+fn materialize_iterate_emits_value_stream() {
+    jfmt()
+        .args(["filter", "-m", ".[]"])
+        .write_stdin("[1,2,3]")
+        .assert()
+        .success()
+        .stdout("1\n2\n3");
+}
+
+#[test]
+fn materialize_aggregate_no_longer_rejected() {
+    // With --materialize, length/group_by/etc. should compile cleanly.
+    jfmt()
+        .args(["filter", "-m", "group_by(.k)"])
+        .write_stdin(r#"[{"k":"a"},{"k":"b"},{"k":"a"}]"#)
+        .assert()
+        .success();
+}
+
+#[test]
+fn materialize_input_still_rejected() {
+    jfmt()
+        .args(["filter", "-m", "input"])
+        .write_stdin("[]")
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("multi-document streams"));
+}
+
+#[test]
+fn materialize_conflicts_with_ndjson() {
+    jfmt()
+        .args(["filter", "-m", "--ndjson", "."])
+        .write_stdin("{}")
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn force_requires_materialize() {
+    jfmt()
+        .args(["filter", "--force", "."])
+        .write_stdin("{}")
+        .assert()
+        .code(2);
+}
+
+#[test]
+fn materialize_stdin_skips_budget_check() {
+    // stdin has no known size; the pre-flight should be a no-op
+    // regardless of machine RAM.
+    jfmt()
+        .args(["filter", "-m", "."])
+        .write_stdin(r#"{"x":1}"#)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("exceeds").not());
+}
+
+#[test]
+fn materialize_pretty_uses_blank_line_separator() {
+    jfmt()
+        .args(["filter", "-m", "--pretty", ".[]"])
+        .write_stdin("[1,2,3]")
+        .assert()
+        .success()
+        .stdout("1\n\n2\n\n3");
+}
