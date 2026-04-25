@@ -115,6 +115,17 @@ pub struct FilterArgs {
     #[arg(long = "strict")]
     pub strict: bool,
 
+    /// Materialize the whole input and run with full jq semantics
+    /// (allows length, sort_by, group_by, etc.). Conflicts with
+    /// --ndjson.
+    #[arg(short = 'm', long = "materialize", conflicts_with = "ndjson")]
+    pub materialize: bool,
+
+    /// Skip the RAM budget pre-flight check. Only meaningful with
+    /// --materialize.
+    #[arg(long = "force", requires = "materialize")]
+    pub force: bool,
+
     /// Pretty-print output. Conflicts with --compact and --ndjson.
     #[arg(long = "pretty", conflicts_with = "compact")]
     pub pretty: bool,
