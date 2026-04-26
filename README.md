@@ -3,7 +3,7 @@
 Streaming JSON / NDJSON formatter in Rust. Designed for **TB-scale** files
 with **constant memory** (O(nesting depth), not O(file size)).
 
-[![CI](https://github.com/lizhongwei/XJsonView/actions/workflows/ci.yml/badge.svg)](https://github.com/lizhongwei/XJsonView/actions/workflows/ci.yml)
+[![CI](https://github.com/jokerlix/XJsonView/actions/workflows/ci.yml/badge.svg)](https://github.com/jokerlix/XJsonView/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 ## Status
@@ -21,16 +21,16 @@ for the Phase 1 roadmap.
 ```bash
 # Linux / macOS
 curl --proto '=https' --tlsv1.2 -LsSf \
-  https://github.com/lizhongwei/XJsonView/releases/latest/download/jfmt-installer.sh | sh
+  https://github.com/jokerlix/XJsonView/releases/latest/download/jfmt-installer.sh | sh
 ```
 
 ```powershell
 # Windows
-irm https://github.com/lizhongwei/XJsonView/releases/latest/download/jfmt-installer.ps1 | iex
+irm https://github.com/jokerlix/XJsonView/releases/latest/download/jfmt-installer.ps1 | iex
 ```
 
 Or download a tarball directly from the
-[Releases page](https://github.com/lizhongwei/XJsonView/releases) and
+[Releases page](https://github.com/jokerlix/XJsonView/releases) and
 extract `jfmt` to a directory on your `PATH`. Tarballs are provided for
 Linux x86_64 + aarch64, macOS x86_64 + aarch64, and Windows x86_64.
 

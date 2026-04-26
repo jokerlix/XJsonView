@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-26
+
+### Fixed
+
+- Repository / homepage / install URLs across `Cargo.toml`, `README.md`,
+  and `CHANGELOG.md` now point at `github.com/jokerlix/XJsonView`
+  (the actual remote). Prior `0.1.0` shipped with stale
+  `github.com/lizhongwei/XJsonView` URLs that 404'd.
+
 ## [0.1.0] - 2026-04-26
 
 First non-preview release. Phase 1 complete.
@@ -41,5 +50,6 @@ First non-preview release. Phase 1 complete.
 | v0.0.5 | 2026-04-25 | M4b: `filter --materialize`. |
 | v0.0.6 | 2026-04-25 | M5: JSON Schema validation. |
 
-[Unreleased]: https://github.com/lizhongwei/XJsonView/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/lizhongwei/XJsonView/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jokerlix/XJsonView/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/jokerlix/XJsonView/releases/tag/v0.1.1
+[0.1.0]: https://github.com/jokerlix/XJsonView/releases/tag/v0.1.0
