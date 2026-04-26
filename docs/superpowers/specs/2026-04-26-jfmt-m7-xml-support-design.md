@@ -345,6 +345,17 @@ M7 ships when:
 | XPath / XSLT | out of jfmt scope |
 | Wildcards in `--array-rule` paths | reactive — add if real users hit the verbosity wall |
 
+## Annex A — quick-xml + transitive pins (frozen by Task 1 spike)
+
+- Version: quick-xml=0.39.2.
+- Transitive precise pins required (if any): none required.
+- MSRV 1.75 confirmed by `cargo run --example quickxml_spike`.
+- API shape confirmed: `Reader::from_str`, `read_event_into`, `Writer::write_event`,
+  `Event::{Start, End, Empty, Text, CData, Comment, PI, Decl, DocType, Eof}`.
+- Note: `write_event` consumes the event (not a reference); this is correctly
+  handled by the writer's `Into<Event>` bound and the spike validates the
+  expected round-trip behavior.
+
 ## 11. Open Questions
 
 None at spec-approval time. Items resolved during brainstorming:
