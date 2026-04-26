@@ -7,9 +7,7 @@ use std::io::Cursor;
 fn fixture_ndjson(lines: usize) -> Vec<u8> {
     let mut buf = Vec::new();
     for i in 0..lines {
-        let line = format!(
-            r#"{{"id":{i},"name":"record-{i}","tags":["x","y"],"active":true}}"#
-        );
+        let line = format!(r#"{{"id":{i},"name":"record-{i}","tags":["x","y"],"active":true}}"#);
         buf.extend_from_slice(line.as_bytes());
         buf.push(b'\n');
     }
