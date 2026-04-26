@@ -1,0 +1,21 @@
+[package]
+name = "jfmt-xml"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+authors.workspace = true
+description = "Streaming XML SAX-style reader and writer for jfmt"
+keywords = ["xml", "streaming", "parser", "writer", "sax"]
+categories = ["parser-implementations", "data-structures"]
+readme = "../../README.md"
+
+[dependencies]
+quick-xml = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

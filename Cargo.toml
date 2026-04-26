@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-cli"]
+members = ["crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-cli", "crates/jfmt-xml"]
 
 [workspace.package]
 version = "0.1.1"
