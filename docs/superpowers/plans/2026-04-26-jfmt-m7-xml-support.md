@@ -306,7 +306,7 @@ use crate::{Result, XmlEvent};
 use std::io::Write;
 
 pub struct XmlPrettyConfig {
-    pub indent: usize,
+    pub indent: u8,
     pub tabs: bool,
     pub xml_decl: bool,
 }
@@ -323,9 +323,7 @@ impl Default for XmlPrettyConfig {
 
 pub trait EventWriter {
     fn write_event(&mut self, ev: &XmlEvent) -> Result<()>;
-    fn finish(self) -> Result<()>
-    where
-        Self: Sized;
+    fn finish(&mut self) -> Result<()>;
 }
 
 pub struct XmlWriter<W: Write> {
@@ -806,7 +804,7 @@ use std::io::Write;
 
 #[derive(Debug, Clone)]
 pub struct XmlPrettyConfig {
-    pub indent: usize,
+    pub indent: u8,
     pub tabs: bool,
     pub xml_decl: bool,
 }
@@ -823,9 +821,7 @@ impl Default for XmlPrettyConfig {
 
 pub trait EventWriter {
     fn write_event(&mut self, ev: &XmlEvent) -> Result<()>;
-    fn finish(self) -> Result<()>
-    where
-        Self: Sized;
+    fn finish(&mut self) -> Result<()>;
 }
 
 pub struct XmlWriter<W: Write> {
@@ -877,7 +873,7 @@ impl<W: Write> EventWriter for XmlWriter<W> {
         Ok(())
     }
 
-    fn finish(self) -> Result<()> {
+    fn finish(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -1178,7 +1174,7 @@ impl<W: Write> EventWriter for XmlWriter<W> {
         Ok(())
     }
 
-    fn finish(self) -> Result<()> {
+    fn finish(&mut self) -> Result<()> {
         Ok(())
     }
 }
@@ -1755,7 +1751,7 @@ impl<W: Write> JsonEmitter<W> {
         Ok(())
     }
 
-    fn finish(mut self) -> Result<()> {
+    fn finish(&mut self) -> Result<()> {
         // Drain stack (should only fire on malformed input that omits
         // root close — proper XML always lands stack at depth 0 when EOF
         // arrives).
