@@ -4,6 +4,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+authors.workspace = true
+description = "Streaming JSON / NDJSON parser, writer, filter, validator at TB scale"
+keywords = ["json", "ndjson", "streaming", "parser", "jq"]
+categories = ["parser-implementations", "data-structures"]
+readme = "../../README.md"
 
 [dependencies]
 struson = { workspace = true }

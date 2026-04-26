@@ -4,6 +4,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+authors.workspace = true
+description = "I/O adapters for jfmt: stdin/stdout, gzip/zstd compression"
+keywords = ["json", "io", "streaming", "gzip", "zstd"]
+categories = ["filesystem", "compression"]
+readme = "../../README.md"
 
 [dependencies]
 jfmt-core = { path = "../jfmt-core" }

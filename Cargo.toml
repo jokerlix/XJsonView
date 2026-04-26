@@ -8,6 +8,8 @@ edition = "2021"
 rust-version = "1.75"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/lizhongwei/XJsonView"
+homepage = "https://github.com/lizhongwei/XJsonView"
+documentation = "https://docs.rs/jfmt-cli"
 authors = ["lizhongwei <lzw1003362793@gmail.com>"]
 
 [workspace.dependencies]

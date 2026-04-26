@@ -4,6 +4,14 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+authors.workspace = true
+description = "Streaming JSON / NDJSON formatter and filter CLI"
+keywords = ["json", "jq", "ndjson", "cli", "formatter"]
+categories = ["command-line-utilities"]
+readme = "../../README.md"
 
 [[bin]]
 name = "jfmt"
