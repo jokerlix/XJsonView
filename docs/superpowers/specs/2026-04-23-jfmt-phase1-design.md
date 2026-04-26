@@ -256,7 +256,7 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 | M4a | `jfmt filter` streaming + NDJSON | embed jaq, top-level shard driver, static check, runtime guard | 1 week |
 | M4b | `jfmt filter --materialize` | full-document jq semantics, memory budget check | 3–5 days |
 | M5 | JSON Schema support | `jsonschema` integration, path reporting, combined validation | shipped (v0.0.6, 2026-04-25) |
-| M6 | Release polish | progress bar, `cargo-dist`, README, multi-platform CI | 1 week |
+| M6 | Release polish | LICENSE files, CHANGELOG, criterion benches, `cargo-dist`, README polish, v0.1.0 tag | shipped (v0.1.0, 2026-04-26) |
 
 | M1 ✓ | Shipped v0.0.1 on 2026-04-24 (tag `v0.0.1`) |
 | M2 ✓ | Shipped v0.0.2 on 2026-04-25 (tag `v0.0.2`) |
@@ -264,8 +264,17 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 | M4a ✓ | Shipped v0.0.4 on 2026-04-25 (tag `v0.0.4`) |
 | M4b ✓ | Shipped v0.0.5 on 2026-04-25 (tag `v0.0.5`) |
 | M5 ✓ | Shipped v0.0.6 on 2026-04-25 |
+| M6 ✓ | Shipped v0.1.0 on 2026-04-26 — Phase 1 complete. |
 
 **Total:** ~6–8 weeks full-time for v0.1.
+
+## Phase 1 status
+
+**Phase 1 complete** as of 2026-04-26 (v0.1.0). All six milestones
+(M1 through M6) shipped. The crate workspace, CLI surface, and
+binary release pipeline are stable; future work (Phase 1.5+) can
+publish to crates.io, add benchmarks to CI, and explore the GUI /
+indexing / web phases listed in §1.
 
 ## 12. Open Questions
 
