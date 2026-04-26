@@ -37,3 +37,7 @@ harness = false
 [[bench]]
 name = "bench_writer"
 harness = false
+
+[[bench]]
+name = "bench_ndjson_pipeline"
+harness = false
