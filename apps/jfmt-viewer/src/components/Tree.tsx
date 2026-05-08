@@ -8,6 +8,7 @@ interface Props {
   rootId: NodeId;
   onSelect?: (node: NodeId | null) => void;
   selectedId?: NodeId | null;
+  onContextMenu?: (node: NodeId | null, x: number, y: number) => void;
 }
 
 export interface TreeHandle {
@@ -30,7 +31,7 @@ const PAGE_LIMIT = 200;
 const ROW_HEIGHT = 22;
 
 export const Tree = forwardRef<TreeHandle, Props>(function Tree(
-  { sessionId, rootId, onSelect, selectedId },
+  { sessionId, rootId, onSelect, selectedId, onContextMenu },
   ref,
 ) {
   const [byId, setById] = useState<Map<NodeId, NodeState>>(new Map());
@@ -186,6 +187,7 @@ export const Tree = forwardRef<TreeHandle, Props>(function Tree(
                 expanded={expanded}
                 onToggle={() => row.child.id !== null && toggle(row.child.id)}
                 onSelect={() => onSelect?.(row.child.id)}
+                onContextMenu={(e) => onContextMenu?.(row.child.id, e.clientX, e.clientY)}
               />
             </div>
           );

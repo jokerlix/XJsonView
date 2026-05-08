@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { closeFile, NodeId, openFile } from "./api";
+import { closeFile, getPointer, NodeId, openFile, SearchQuery } from "./api";
 import { Tree, TreeHandle } from "./components/Tree";
 import { Preview } from "./components/Preview";
 import { SearchBar } from "./components/SearchBar";
 import { HitList } from "./components/HitList";
 import { useSearch } from "./lib/searchState";
 import { copyPointer } from "./lib/clipboard";
+import { ContextMenu, ContextMenuItem } from "./components/ContextMenu";
 
 interface OpenSession {
   sessionId: string;
@@ -21,6 +22,9 @@ export function App() {
   const [progress, setProgress] = useState<string>("");
   const [selected, setSelected] = useState<NodeId | null>(null);
   const [pointerHint, setPointerHint] = useState<string>("");
+  const [menu, setMenu] = useState<{ node: NodeId | null; x: number; y: number } | null>(null);
+  const [searchScope, setSearchScope] = useState<NodeId | undefined>(undefined);
+  const [scopePath, setScopePath] = useState<string>("");
 
   const sessionId = session?.sessionId ?? null;
   const { state: searchState, start: startSearch, cancel: cancelSearchOp } = useSearch(sessionId);
@@ -56,6 +60,30 @@ export function App() {
     setTimeout(() => setPointerHint(""), 2000);
   }
 
+  function menuItems(node: NodeId | null): ContextMenuItem[] {
+    if (node === null || !session) return [];
+    return [
+      {
+        label: "Search from this node",
+        onClick: () => setSearchScope(node),
+      },
+      {
+        label: "Export subtree…",
+        onClick: () => exportSubtreeFlow(node),
+      },
+    ];
+  }
+
+  // Stub for Task 8 — replaced when the export flow lands.
+  async function exportSubtreeFlow(_node: NodeId) {
+    setPointerHint("export coming in Task 8");
+    setTimeout(() => setPointerHint(""), 2000);
+  }
+
+  function startSearchScoped(q: SearchQuery) {
+    return startSearch({ ...q, from_node: searchScope });
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const isCopy = (e.ctrlKey || e.metaKey) && e.key === "c";
@@ -71,6 +99,24 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, selected]);
+
+  useEffect(() => {
+    (async () => {
+      if (!session || searchScope === undefined) {
+        setScopePath("");
+        return;
+      }
+      const p = await getPointer(session.sessionId, searchScope);
+      setScopePath(p || "/");
+    })();
+  }, [session, searchScope]);
+
+  useEffect(() => {
+    if (searchState.query.needle.trim()) {
+      startSearchScoped(searchState.query);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchScope]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -158,8 +204,10 @@ export function App() {
               state={searchState}
               cursor={searchCursor}
               onCursorChange={setSearchCursor}
-              onQuery={startSearch}
+              onQuery={startSearchScoped}
               onCancel={cancelSearchOp}
+              scopePath={scopePath}
+              onClearScope={() => setSearchScope(undefined)}
             />
           </span>
         )}
@@ -174,12 +222,21 @@ export function App() {
               rootId={session.rootId}
               onSelect={setSelected}
               selectedId={selected}
+              onContextMenu={(node, x, y) => setMenu({ node, x, y })}
             />
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
             <Preview sessionId={session.sessionId} node={selected} />
           </div>
         </div>
+      )}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={menuItems(menu.node)}
+          onDismiss={() => setMenu(null)}
+        />
       )}
     </main>
   );

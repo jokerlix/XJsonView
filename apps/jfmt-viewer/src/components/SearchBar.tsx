@@ -8,11 +8,13 @@ interface Props {
   state: SearchState;
   cursor: number;
   onCursorChange: (next: number) => void;
+  scopePath?: string;
+  onClearScope?: () => void;
 }
 
 const DEBOUNCE_MS = 250;
 
-export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: Props) {
+export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange, scopePath, onClearScope }: Props) {
   const [needle, setNeedle] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [scope, setScope] = useState<SearchQuery["scope"]>("both");
@@ -103,6 +105,22 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: 
         <option value="keys">keys</option>
         <option value="values">values</option>
       </select>
+      {scopePath && (
+        <span
+          onClick={onClearScope}
+          title="Click to clear scope"
+          style={{
+            background: "#eef",
+            border: "1px solid #aac",
+            padding: "2px 6px",
+            fontSize: 11,
+            cursor: "pointer",
+            borderRadius: 3,
+          }}
+        >
+          scope: {scopePath} ✕
+        </span>
+      )}
       <span style={{ color: "#666", fontSize: 12, minWidth: 60 }}>
         {counter}
       </span>

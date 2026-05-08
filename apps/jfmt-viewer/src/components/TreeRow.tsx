@@ -1,3 +1,4 @@
+import React from "react";
 import { ChildSummary } from "../api";
 
 interface Props {
@@ -6,9 +7,10 @@ interface Props {
   expanded: boolean;
   onToggle: () => void;
   onSelect: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
-export function TreeRow({ child, depth, expanded, onToggle, onSelect }: Props) {
+export function TreeRow({ child, depth, expanded, onToggle, onSelect, onContextMenu }: Props) {
   const isContainer = child.id !== null;
   const chevron = isContainer ? (expanded ? "▾" : "▸") : "•";
   const sizeHint = isContainer ? `[${child.child_count}]` : (child.preview ?? "");
@@ -25,6 +27,12 @@ export function TreeRow({ child, depth, expanded, onToggle, onSelect }: Props) {
         userSelect: "none",
       }}
       onClick={onSelect}
+      onContextMenu={(e) => {
+        if (onContextMenu) {
+          e.preventDefault();
+          onContextMenu(e);
+        }
+      }}
     >
       <span
         style={{ width: 14, display: "inline-block" }}
