@@ -27,10 +27,7 @@ fn view_with_existing_file_attempts_to_spawn() {
     let mut cmd = Command::cargo_bin("jfmt").unwrap();
     cmd.env_remove("PATH"); // force the "binary not found" path
     cmd.args(["view", "Cargo.toml"]);
-    cmd.assert()
-        .failure()
-        .stderr(
-            predicate::str::contains("jfmt-viewer")
-                .and(predicate::str::contains("could not find")),
-        );
+    cmd.assert().failure().stderr(
+        predicate::str::contains("jfmt-viewer").and(predicate::str::contains("could not find")),
+    );
 }

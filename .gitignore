@@ -1,9 +1,12 @@
 /target
+**/target/
 **/*.rs.bk
 .DS_Store
 *.swp
 .vscode/
 .idea/
+.claude/settings.local.json
+**/*.proptest-regressions
 target/criterion/
 
 # jfmt-viewer build outputs

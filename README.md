@@ -228,6 +228,21 @@ jfmt minify --ndjson big.ndjson                    # default = physical cores
 Output is always written in input order. `--threads` is silently
 ignored in single-document mode.
 
+## View
+
+`jfmt view <file>` launches the GUI viewer (Phase 2). Supports JSON
+and NDJSON files; streams the index so multi-GB files open in seconds.
+Features:
+
+- Virtual scrolling for trees with millions of nodes
+- Right-pane preview of the selected subtree (pretty-printed)
+- Toolbar substring search across keys and string-leaf values
+  (case-insensitive default; ASCII fast path)
+- One-click copy of the selected node's JSON Pointer (RFC 6901)
+
+Install the standalone GUI from the GitHub Release alongside the CLI.
+The `jfmt` CLI auto-discovers `jfmt-viewer` on PATH or next to itself.
+
 ## Exit codes
 
 | Code | Meaning |

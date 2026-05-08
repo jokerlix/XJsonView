@@ -18,7 +18,10 @@ pub fn is_ndjson_path<P: AsRef<Path>>(p: P) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn build_ndjson<F: FnMut(u64, u64)>(input: &[u8], mut on_progress: F) -> Result<SparseIndex> {
+pub(crate) fn build_ndjson<F: FnMut(u64, u64)>(
+    input: &[u8],
+    mut on_progress: F,
+) -> Result<SparseIndex> {
     // Synthetic root entry at index 0.
     let mut entries = vec![ContainerEntry {
         file_offset: 0,

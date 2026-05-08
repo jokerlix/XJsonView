@@ -16,8 +16,8 @@ pub fn run<P: AsRef<Path>>(file: P) -> Result<()> {
             file.display()
         ));
     }
-    let abs = std::fs::canonicalize(file)
-        .with_context(|| format!("canonicalize {}", file.display()))?;
+    let abs =
+        std::fs::canonicalize(file).with_context(|| format!("canonicalize {}", file.display()))?;
 
     let viewer = locate_viewer().ok_or_else(|| {
         anyhow!(
@@ -58,8 +58,7 @@ fn locate_viewer() -> Option<PathBuf> {
     }
     #[cfg(target_os = "macos")]
     {
-        let app =
-            PathBuf::from("/Applications/jfmt-viewer.app/Contents/MacOS/jfmt-viewer");
+        let app = PathBuf::from("/Applications/jfmt-viewer.app/Contents/MacOS/jfmt-viewer");
         if app.exists() {
             return Some(app);
         }
@@ -68,9 +67,8 @@ fn locate_viewer() -> Option<PathBuf> {
 }
 
 fn which(name: &str) -> std::io::Result<PathBuf> {
-    let path = std::env::var_os("PATH").ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "PATH not set")
-    })?;
+    let path = std::env::var_os("PATH")
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "PATH not set"))?;
     for dir in std::env::split_paths(&path) {
         let candidate = dir.join(name);
         if candidate.is_file() {

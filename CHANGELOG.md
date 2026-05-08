@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-09
+
+First Phase 2 release. Adds a desktop GUI viewer.
+
+### Added
+
+- `jfmt view <file>` launches the new desktop viewer.
+- Tauri 2 + React + TanStack Virtual GUI capable of browsing 10 GB
+  JSON / NDJSON files with virtual scrolling.
+- Streaming substring search across object keys and string-leaf
+  values, with cancel + progress events.
+- JSON Pointer (RFC 6901) copy from any selected node.
+- Right-pane subtree preview (pretty-printed; truncates at 4 MB
+  with an export hook reserved for M9).
+- New `jfmt-viewer-core` crate exposing `Session::open_with_progress`,
+  `get_children`, `get_value`, `get_pointer`, `run_search`.
+
+### Changed
+
+- **MSRV bumped from 1.75 to 1.85.** Required by Tauri 2's
+  transitive dependency on `toml_writer 1.1.1+spec-1.1.0`.
+
+### Fixed
+
+- M7 proptest generators (`proptest_convert`, `proptest_roundtrip`)
+  now dedupe attribute names; the previous behaviour produced
+  invalid XML that surfaced as a flake under 1.85's proptest
+  shrinking.
+
 ## [0.2.0] - 2026-04-26
 
 First Phase 1b release.
