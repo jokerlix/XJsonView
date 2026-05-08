@@ -4,6 +4,7 @@ mod state;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(state::ViewerState::new())
         .invoke_handler(tauri::generate_handler![
             commands::open_file,
