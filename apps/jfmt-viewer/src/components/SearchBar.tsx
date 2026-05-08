@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { SearchQuery } from "../api";
+import { SearchMode, SearchQuery } from "../api";
 import { SearchState } from "../lib/searchState";
 
 interface Props {
@@ -16,6 +16,7 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: 
   const [needle, setNeedle] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [scope, setScope] = useState<SearchQuery["scope"]>("both");
+  const [mode, setMode] = useState<SearchMode>("substring");
   const tRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -25,13 +26,13 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: 
       if (needle.trim() === "") {
         onCancel();
       } else {
-        onQuery({ needle, mode: "substring", case_sensitive: caseSensitive, scope });
+        onQuery({ needle, mode, case_sensitive: caseSensitive, scope });
       }
     }, DEBOUNCE_MS);
     return () => {
       if (tRef.current !== null) clearTimeout(tRef.current);
     };
-  }, [needle, caseSensitive, scope, onQuery, onCancel]);
+  }, [needle, caseSensitive, scope, mode, onQuery, onCancel]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -71,11 +72,13 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: 
         value={needle}
         onChange={(e) => setNeedle(e.target.value)}
         placeholder="🔍 search"
+        title={state.queryError ?? undefined}
         style={{
           width: 200,
           padding: "2px 6px",
           fontFamily: "ui-monospace, monospace",
           fontSize: 12,
+          border: state.queryError ? "1px solid #c33" : undefined,
         }}
       />
       <button
@@ -84,6 +87,13 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: 
         style={{ fontWeight: caseSensitive ? "bold" : "normal" }}
       >
         Aa
+      </button>
+      <button
+        onClick={() => setMode((m) => (m === "regex" ? "substring" : "regex"))}
+        title="Regex (toggle)"
+        style={{ fontWeight: mode === "regex" ? "bold" : "normal" }}
+      >
+        .*
       </button>
       <select
         value={scope}

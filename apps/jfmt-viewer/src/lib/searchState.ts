@@ -16,6 +16,7 @@ export interface SearchState {
   cancelled: boolean;
   error: string | null;
   hitCap: boolean;
+  queryError: string | null;  // NEW
 }
 
 const HIT_CAP = 1000;
@@ -29,6 +30,7 @@ export function useSearch(sessionId: string | null) {
     cancelled: false,
     error: null,
     hitCap: false,
+    queryError: null,
   });
   const handleRef = useRef<string | null>(null);
 
@@ -46,39 +48,51 @@ export function useSearch(sessionId: string | null) {
       cancelled: false,
       error: null,
       hitCap: false,
+      queryError: null,
     });
     if (!query.needle.trim()) {
       setState((s) => ({ ...s, scanning: false }));
       return;
     }
-    const handle = await search(sessionId, query, (e: SearchEvent) => {
-      setState((prev) => {
-        if (e.kind === "hit") {
-          if (prev.hits.length >= HIT_CAP) {
-            return { ...prev, totalSoFar: prev.totalSoFar + 1, hitCap: true };
+    try {
+      const handle = await search(sessionId, query, (e: SearchEvent) => {
+        setState((prev) => {
+          if (e.kind === "hit") {
+            if (prev.hits.length >= HIT_CAP) {
+              return { ...prev, totalSoFar: prev.totalSoFar + 1, hitCap: true };
+            }
+            return {
+              ...prev,
+              hits: [...prev.hits, e],
+              totalSoFar: prev.totalSoFar + 1,
+            };
           }
-          return {
-            ...prev,
-            hits: [...prev.hits, e],
-            totalSoFar: prev.totalSoFar + 1,
-          };
-        }
-        if (e.kind === "progress") {
-          return { ...prev, totalSoFar: e.hits_so_far };
-        }
-        if (e.kind === "done") {
-          return { ...prev, scanning: false };
-        }
-        if (e.kind === "cancelled") {
-          return { ...prev, scanning: false, cancelled: true };
-        }
-        if (e.kind === "error") {
-          return { ...prev, scanning: false, error: e.message };
-        }
-        return prev;
+          if (e.kind === "progress") {
+            return { ...prev, totalSoFar: e.hits_so_far };
+          }
+          if (e.kind === "done") {
+            return { ...prev, scanning: false };
+          }
+          if (e.kind === "cancelled") {
+            return { ...prev, scanning: false, cancelled: true };
+          }
+          if (e.kind === "error") {
+            return { ...prev, scanning: false, error: e.message };
+          }
+          return prev;
+        });
       });
-    });
-    handleRef.current = handle.id;
+      handleRef.current = handle.id;
+    } catch (err: unknown) {
+      const msg = (err && typeof err === "object" && "message" in err)
+        ? String((err as { message: unknown }).message)
+        : String(err);
+      if (msg.toLowerCase().startsWith("invalid query")) {
+        setState((s) => ({ ...s, scanning: false, queryError: msg }));
+      } else {
+        setState((s) => ({ ...s, scanning: false, error: msg }));
+      }
+    }
   }
 
   async function cancel() {
