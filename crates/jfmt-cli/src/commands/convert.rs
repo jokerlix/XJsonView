@@ -1,6 +1,7 @@
 //! `jfmt convert` — JSON ↔ XML conversion.
 
 pub mod format;
+pub mod xml_to_json;
 
 use crate::cli::ConvertArgs;
 use anyhow::{anyhow, bail, Context, Result};
@@ -18,11 +19,11 @@ pub fn run(args: ConvertArgs) -> Result<()> {
     }
 
     // Open input + output via jfmt-io. (Future tasks fill the bodies.)
-    let _input = open_input(&args)?;
-    let _output = open_output(&args)?;
+    let input = open_input(&args)?;
+    let output = open_output(&args)?;
 
     match (from, to) {
-        (Format::Xml, Format::Json) => bail!("XML → JSON not yet implemented (Task 8)"),
+        (Format::Xml, Format::Json) => xml_to_json::translate(input, output, &args),
         (Format::Json, Format::Xml) => bail!("JSON → XML not yet implemented (Task 10)"),
         _ => unreachable!("from != to enforced above"),
     }

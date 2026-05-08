@@ -38,19 +38,24 @@ impl<R: Read> EventReader<R> {
     pub fn next_event(&mut self) -> Result<Option<XmlEvent>> {
         // Return any previously buffered event first. These paths bypass the
         // main match, so adjust depth here.
-        if let Some(ev) = self.pending_end.take() {
-            // Synthesized EndTag from an Empty element — its Start was already
-            // counted, so close it now.
-            if matches!(ev, XmlEvent::EndTag { .. }) {
-                self.depth = self.depth.saturating_sub(1);
-            }
-            return Ok(Some(ev));
-        }
+        //
+        // pending_event must be drained before pending_end. When
+        // `accumulate_text` lookahead hits an Empty element, it stores the
+        // synthesized Start in pending_event and the End in pending_end —
+        // the Start has to come out first to keep document order.
         if let Some(ev) = self.pending_event.take() {
             match &ev {
                 XmlEvent::StartTag { .. } => self.depth += 1,
                 XmlEvent::EndTag { .. } => self.depth = self.depth.saturating_sub(1),
                 _ => {}
+            }
+            return Ok(Some(ev));
+        }
+        if let Some(ev) = self.pending_end.take() {
+            // Synthesized EndTag from an Empty element — its Start was already
+            // counted, so close it now.
+            if matches!(ev, XmlEvent::EndTag { .. }) {
+                self.depth = self.depth.saturating_sub(1);
             }
             return Ok(Some(ev));
         }
