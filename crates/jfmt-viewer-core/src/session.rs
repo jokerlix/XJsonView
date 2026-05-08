@@ -27,6 +27,14 @@ pub struct GetChildrenResp {
     pub total: u32,
 }
 
+const DEFAULT_GET_VALUE_CAP: u64 = 4 * 1024 * 1024; // 4 MB — spec §4.2
+
+#[derive(Debug, Serialize)]
+pub struct GetValueResp {
+    pub json: String,
+    pub truncated: bool,
+}
+
 #[derive(Debug)]
 pub struct Session {
     path: PathBuf,
@@ -185,6 +193,67 @@ impl Session {
         })
     }
 
+    pub fn get_value(&self, node: NodeId, max_bytes: Option<u64>) -> Result<GetValueResp> {
+        let cap = max_bytes.unwrap_or(DEFAULT_GET_VALUE_CAP);
+        let entry = self
+            .index
+            .entries
+            .get(node.0 as usize)
+            .ok_or(ViewerError::InvalidNode)?;
+
+        // Like get_children, `file_offset` may land just past the preceding
+        // key/colon rather than on the opening brace. Scan forward to the actual
+        // opening container byte before slicing.
+        // (For NDJSON synthetic root, file_offset is 0 which is fine.)
+        let raw_start = entry.file_offset as usize;
+        let open_byte = match entry.kind {
+            ContainerKind::Object | ContainerKind::NdjsonDoc => b'{',
+            ContainerKind::Array => b'[',
+        };
+        let actual_start = self.bytes[raw_start..]
+            .iter()
+            .position(|&b| b == open_byte)
+            .map(|p| raw_start + p)
+            .unwrap_or(raw_start);
+
+        let raw_end = entry.byte_end as usize;
+        let slice = &self.bytes[actual_start..raw_end];
+
+        // Parse with serde_json and re-serialize pretty.
+        let value: serde_json::Value = serde_json::from_slice(slice).map_err(|e| {
+            ViewerError::Parse {
+                pos: entry.file_offset,
+                msg: e.to_string(),
+            }
+        })?;
+        let pretty = serde_json::to_string_pretty(&value).map_err(|e| ViewerError::Parse {
+            pos: entry.file_offset,
+            msg: e.to_string(),
+        })?;
+
+        if (pretty.len() as u64) <= cap {
+            return Ok(GetValueResp {
+                json: pretty,
+                truncated: false,
+            });
+        }
+
+        // Char-boundary aware truncation.
+        let mut take = (cap as usize).min(pretty.len());
+        while take > 0 && !pretty.is_char_boundary(take) {
+            take -= 1;
+        }
+        let prefix = &pretty[..take];
+        let total_mb = (pretty.len() as f64) / (1024.0 * 1024.0);
+        let trailer = format!(
+            "\n... (truncated, {total_mb:.1} MB total — export full subtree feature lands in M9)\n"
+        );
+        Ok(GetValueResp {
+            json: format!("{prefix}{trailer}"),
+            truncated: true,
+        })
+    }
+
     fn consume_key(
         &self,
         parent_kind: ContainerKind,
@@ -337,5 +406,30 @@ mod tests {
             err,
             crate::ViewerError::NotFound(_) | crate::ViewerError::Io(_)
         ));
+    }
+
+    #[test]
+    fn get_value_pretty_prints_root() {
+        let s = small_session();
+        let v = s.get_value(NodeId::ROOT, None).unwrap();
+        assert!(!v.truncated);
+        assert!(v.json.starts_with("{\n"));
+        assert!(v.json.contains("\"users\""));
+        assert!(v.json.contains("  \"meta\""));
+    }
+
+    #[test]
+    fn get_value_truncates_when_over_cap() {
+        let s = small_session();
+        let v = s.get_value(NodeId::ROOT, Some(40)).unwrap();
+        assert!(v.truncated);
+        assert!(v.json.contains("(truncated"));
+    }
+
+    #[test]
+    fn get_value_invalid_node() {
+        let s = small_session();
+        let err = s.get_value(NodeId(9999), None).unwrap_err();
+        assert!(matches!(err, crate::ViewerError::InvalidNode));
     }
 }
