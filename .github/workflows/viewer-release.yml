@@ -1,0 +1,66 @@
+name: viewer-release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: msi
+          - os: macos-latest
+            target: dmg
+          - os: ubuntu-22.04
+            target: deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/jfmt-viewer/pnpm-lock.yaml
+
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install frontend deps
+        run: cd apps/jfmt-viewer && pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: apps/jfmt-viewer
+          tagName: ${{ github.ref_name }}
+          releaseName: jfmt ${{ github.ref_name }}
+          includeUpdaterJson: false
+          createRelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  e2e:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Install Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev xvfb
+      - run: cargo install tauri-driver --locked
+      - run: cd apps/jfmt-viewer && pnpm install --frozen-lockfile
+      - run: cd apps/jfmt-viewer/e2e && pnpm install --frozen-lockfile=false
+      - run: xvfb-run -a pnpm --dir apps/jfmt-viewer e2e
