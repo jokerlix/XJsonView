@@ -2,6 +2,7 @@
 
 pub mod array_rule;
 pub mod format;
+pub mod json_to_xml;
 pub mod xml_to_json;
 
 use crate::cli::ConvertArgs;
@@ -25,7 +26,7 @@ pub fn run(args: ConvertArgs) -> Result<()> {
 
     match (from, to) {
         (Format::Xml, Format::Json) => xml_to_json::translate(input, output, &args),
-        (Format::Json, Format::Xml) => bail!("JSON → XML not yet implemented (Task 10)"),
+        (Format::Json, Format::Xml) => json_to_xml::translate(input, output, &args),
         _ => unreachable!("from != to enforced above"),
     }
 }
