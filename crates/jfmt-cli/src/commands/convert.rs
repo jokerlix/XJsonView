@@ -1,5 +1,6 @@
 //! `jfmt convert` — JSON ↔ XML conversion.
 
+pub mod array_rule;
 pub mod format;
 pub mod xml_to_json;
 

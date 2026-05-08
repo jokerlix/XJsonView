@@ -66,5 +66,15 @@ fn classify(e: &anyhow::Error) -> ExitCode {
             return ExitCode::XmlSyntax;
         }
     }
+    if e.downcast_ref::<commands::convert::xml_to_json::NonContiguousSiblings>()
+        .is_some()
+    {
+        return ExitCode::StrictNonContiguous;
+    }
+    if e.downcast_ref::<commands::convert::xml_to_json::ArrayRuleMultiple>()
+        .is_some()
+    {
+        return ExitCode::Translation;
+    }
     ExitCode::InputError
 }

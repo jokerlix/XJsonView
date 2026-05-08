@@ -1011,6 +1011,7 @@ dependencies = [
  "serde_json",
  "sysinfo",
  "tempfile",
+ "thiserror",
  "zstd",
 ]
 

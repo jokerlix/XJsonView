@@ -156,12 +156,12 @@ non-contiguous siblings are encountered, e.g. `<root><a/><b/><a/></root>`,
 two behaviors:
 
 - **Default (warning)**: emit a warning to stderr (`warning: non-contiguous
-  same-name siblings under <root>: 'a' at line N. Output uses
-  position-preserving form.`) and switch the parent's children to
-  position-preserving array form: `{"root": [{"a": [{}]}, {"b": [{}]},
-  {"a": [{}]}]}`. The promise is honored (output is valid JSON; original
-  XML can still be reconstructed approximately on round-trip), at the cost
-  of an inconsistent shape across documents.
+  same-name siblings under <root>: 'a' at line N. Falling back to first-occurrence array form.`)
+  and continue with the always-array shape. The second 'a' in the example
+  appends into the existing `"a": [...]` from the first occurrence
+  (re-opening the closed array conceptually — implementation note: the
+  array is closed lazily so this is feasible). This means JSON output may
+  not match document XML order across non-contiguous runs.
 - **`--strict`**: hard error, exit code 34. For users who need a
   predictable shape and would rather rewrite their XML.
 
