@@ -31,7 +31,13 @@ fn xml_doc() -> impl Strategy<Value = String> {
     )
         .prop_map(|(n, attrs, text)| {
             let mut s = format!("<{n}");
+            // Dedupe attribute names — duplicate `name` is invalid XML and
+            // would be rejected by the parser.
+            let mut seen = std::collections::HashSet::new();
             for (k, v) in &attrs {
+                if !seen.insert(k.clone()) {
+                    continue;
+                }
                 s.push_str(&format!(r#" {k}="{}""#, escape_attr(v)));
             }
             if let Some(t) = text {
@@ -55,7 +61,7 @@ fn xml_doc() -> impl Strategy<Value = String> {
 
 fn extract_first_name(s: &str) -> String {
     s.trim_start_matches('<')
-        .split(|c: char| c == ' ' || c == '/' || c == '>')
+        .split([' ', '/', '>'])
         .next()
         .unwrap_or("")
         .to_string()

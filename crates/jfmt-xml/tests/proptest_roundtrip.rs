@@ -19,6 +19,13 @@ fn element_strategy() -> impl Strategy<Value = Vec<XmlEvent>> {
         "[a-zA-Z0-9 ]{0,16}".prop_map(String::from),
     )
         .prop_map(|(name, attrs, text)| {
+            // Dedupe attribute names — duplicate keys are invalid XML and
+            // would be rejected by the parser.
+            let mut seen = std::collections::HashSet::new();
+            let attrs: Vec<_> = attrs
+                .into_iter()
+                .filter(|(k, _)| seen.insert(k.clone()))
+                .collect();
             let mut evs = vec![XmlEvent::StartTag {
                 name: name.clone(),
                 attrs,
