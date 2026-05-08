@@ -37,7 +37,9 @@ export function TreeRow({ child, depth, expanded, onToggle, onSelect }: Props) {
       >
         {chevron}
       </span>
-      <span style={{ color: "#888" }}> {child.kind}</span>{" "}
+      <span style={{ color: "#888" }}>
+        {" "}{child.kind === "ndjson_doc" ? "doc" : child.kind}
+      </span>{" "}
       <strong>{child.key}</strong>{" "}
       <span style={{ color: "#444" }}>{sizeHint}</span>
     </div>

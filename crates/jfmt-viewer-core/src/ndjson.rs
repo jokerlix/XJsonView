@@ -234,4 +234,21 @@ mod tests {
         assert!(!is_ndjson_path("foo.json"));
         assert!(!is_ndjson_path("foo"));
     }
+
+    #[test]
+    fn fifty_k_lines_index_perf() {
+        let path = format!(
+            "{}/tests/fixtures/large-ndjson.ndjson",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let bytes = std::fs::read(&path).expect(&path);
+        let start = std::time::Instant::now();
+        let idx = SparseIndex::build(&bytes, IndexMode::Ndjson).unwrap();
+        let elapsed = start.elapsed();
+        assert_eq!(idx.entries[0].child_count, 50_000);
+        assert!(
+            elapsed < std::time::Duration::from_secs(5),
+            "indexed in {elapsed:?}"
+        );
+    }
 }
