@@ -4,5 +4,6 @@
 //! wrappers.
 
 pub mod error;
+pub mod pointer;
 
 pub use error::{Result, ViewerError};
