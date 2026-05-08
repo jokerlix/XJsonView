@@ -282,6 +282,31 @@ impl Session {
         None
     }
 
+    pub fn get_pointer(&self, node: NodeId) -> Result<String> {
+        if node == NodeId::ROOT {
+            return Ok(String::new());
+        }
+        let mut segments: Vec<String> = Vec::new();
+        let mut cur = node;
+        loop {
+            let entry = self
+                .index
+                .entries
+                .get(cur.0 as usize)
+                .ok_or(ViewerError::InvalidNode)?;
+            match entry.parent {
+                Some(p) => {
+                    segments.push(entry.key_or_index.as_str().to_string());
+                    cur = p;
+                }
+                None => break,
+            }
+        }
+        segments.reverse();
+        let refs: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+        Ok(crate::pointer::encode_pointer(&refs))
+    }
+
     fn ndjson_root_children(&self, offset: u32, limit: u32) -> Result<GetChildrenResp> {
         let mut items = Vec::new();
         for (i, e) in self.index.entries.iter().enumerate().skip(1) {
@@ -430,6 +455,41 @@ mod tests {
     fn get_value_invalid_node() {
         let s = small_session();
         let err = s.get_value(NodeId(9999), None).unwrap_err();
+        assert!(matches!(err, crate::ViewerError::InvalidNode));
+    }
+
+    #[test]
+    fn root_pointer_is_empty() {
+        let s = small_session();
+        assert_eq!(s.get_pointer(NodeId::ROOT).unwrap(), "");
+    }
+
+    #[test]
+    fn nested_pointer_uses_keys_and_indexes() {
+        let s = small_session();
+        let users = s
+            .get_children(NodeId::ROOT, 0, 100)
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|c| c.key == "users")
+            .unwrap();
+        let users_id = users.id.unwrap();
+        let user1 = s
+            .get_children(users_id, 0, 100)
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|c| c.key == "1")
+            .unwrap();
+        let user1_id = user1.id.unwrap();
+        assert_eq!(s.get_pointer(user1_id).unwrap(), "/users/1");
+    }
+
+    #[test]
+    fn pointer_invalid_node() {
+        let s = small_session();
+        let err = s.get_pointer(NodeId(9999)).unwrap_err();
         assert!(matches!(err, crate::ViewerError::InvalidNode));
     }
 }
