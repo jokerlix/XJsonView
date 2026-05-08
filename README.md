@@ -8,9 +8,8 @@ with **constant memory** (O(nesting depth), not O(file size)).
 
 ## Status
 
-**M5 preview (v0.0.6)** — `pretty`, `minify`, `validate` (with
-JSON Schema, `--strict`, `--materialize`, NDJSON parallel + per-element
-streaming), and `filter` (streaming + NDJSON parallel + `--materialize`).
+**v0.2.0 (Phase 1b)** — adds `jfmt convert` for streaming JSON ↔ XML.
+Phase 1 surface (`pretty`, `minify`, `validate`, `filter`) unchanged.
 See [`docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md`](docs/superpowers/specs/2026-04-23-jfmt-phase1-design.md)
 for the Phase 1 roadmap.
 
@@ -186,6 +185,34 @@ through `serde_json::Map` does not preserve insertion order). Use
 
 The streaming-mode hint prints to stderr on first invocation; pipe with
 `2>/dev/null` to silence.
+
+### Convert
+
+Convert between JSON and XML, streaming where possible.
+
+```bash
+# File → file (format inferred from extensions)
+jfmt convert in.xml -o out.json
+jfmt convert in.json -o out.xml
+
+# stdin / stdout require explicit format
+cat in.xml | jfmt convert --from xml --to json
+echo '{"a":"v"}' | jfmt convert --from json --to xml
+
+# Collapse known-singular elements out of always-array form
+jfmt convert in.xml -o out.json --array-rule "users.user,items.item"
+
+# Wrap a multi-key JSON object under a single root element
+jfmt convert in.json -o out.xml --root doc --pretty --xml-decl
+
+# Strict mode: error on non-contiguous same-name XML siblings
+jfmt convert in.xml -o out.json --strict
+```
+
+The XML→JSON mapping uses `@attr` for attributes and `#text` for element
+text content; every element is wrapped in a JSON array by default. See
+[`docs/superpowers/specs/2026-04-26-jfmt-m7-xml-support-design.md`](docs/superpowers/specs/2026-04-26-jfmt-m7-xml-support-design.md)
+for the full mapping rules and round-trip guarantees.
 
 ### Parallelism
 

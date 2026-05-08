@@ -265,6 +265,7 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 | M4b ✓ | Shipped v0.0.5 on 2026-04-25 (tag `v0.0.5`) |
 | M5 ✓ | Shipped v0.0.6 on 2026-04-25 |
 | M6 ✓ | Shipped v0.1.0 on 2026-04-26 — Phase 1 complete. |
+| M7 ✓ | Shipped v0.2.0 on 2026-04-26 — Phase 1b kickoff (XML support). |
 
 **Total:** ~6–8 weeks full-time for v0.1.
 
@@ -275,6 +276,12 @@ Each milestone merges to `main` and ships a `0.0.x` preview release.
 binary release pipeline are stable; future work (Phase 1.5+) can
 publish to crates.io, add benchmarks to CI, and explore the GUI /
 indexing / web phases listed in §1.
+
+## Phase 1b status
+
+**M7 shipped** as v0.2.0 on 2026-04-26 — `jfmt convert` for
+streaming JSON ↔ XML, plus a new `jfmt-xml` crate. Remaining Phase 1b
+items (NDJSON-of-XML, YAML, SQL dump) deferred to v0.3.0+.
 
 ## 12. Open Questions
 

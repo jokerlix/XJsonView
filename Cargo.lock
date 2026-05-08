@@ -998,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "jfmt-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1018,7 +1018,7 @@ dependencies = [
 
 [[package]]
 name = "jfmt-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "crossbeam-channel",
@@ -1036,7 +1036,7 @@ dependencies = [
 
 [[package]]
 name = "jfmt-io"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "jfmt-core",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "jfmt-xml"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "proptest",
  "quick-xml",
