@@ -100,6 +100,8 @@ pub struct SearchQuery {
     pub mode: SearchMode,
     pub case_sensitive: bool,
     pub scope: SearchScope,
+    #[serde(default)]
+    pub from_node: Option<NodeId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -161,18 +163,60 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
     let matcher = Matcher::build(query)?;
 
     let bytes = std::fs::read(session.path())?;
-    let mut reader = EventReader::new_unlimited(&bytes[..]);
+    let (slice, mut path_segments, mut next_index_per_depth, scoped_pending_key) =
+        if let Some(node) = query.from_node {
+            let entry = session
+                .index()
+                .entries
+                .get(node.0 as usize)
+                .ok_or(crate::ViewerError::InvalidNode)?;
+            // file_offset may point just past the preceding token; scan forward
+            // to the actual opening bracket (same adjustment as session::get_children).
+            use crate::types::ContainerKind;
+            let scan_start = entry.file_offset as usize;
+            let open_byte = match entry.kind {
+                ContainerKind::Object | ContainerKind::NdjsonDoc => b'{',
+                ContainerKind::Array => b'[',
+            };
+            let actual_start = bytes[scan_start..]
+                .iter()
+                .position(|&b| b == open_byte)
+                .map(|p| scan_start + p)
+                .unwrap_or(scan_start);
+            let scoped = bytes[actual_start..entry.byte_end as usize].to_vec();
+            // Walk the parent chain to build absolute path segments.
+            // All segments form the full path to from_node; the last segment
+            // (from_node's own key) is handed off as pending_key so the first
+            // StartObject/StartArray event in the scoped slice consumes it
+            // correctly via consume_step.
+            let mut all_segs: Vec<String> = Vec::new();
+            let mut cur = node;
+            loop {
+                let e = &session.index().entries[cur.0 as usize];
+                match e.parent {
+                    Some(p) => {
+                        all_segs.push(e.key_or_index.as_str().to_string());
+                        cur = p;
+                    }
+                    None => break,
+                }
+            }
+            all_segs.reverse();
+            // Pop the last segment (from_node's own key) to use as pending_key.
+            let own_key = all_segs.pop();
+            let depth_count = all_segs.len();
+            (scoped, all_segs, vec![0u32; depth_count], own_key)
+        } else {
+            (bytes.clone(), Vec::new(), Vec::new(), None)
+        };
+    let mut reader = EventReader::new_unlimited(&slice[..]);
     let mut total: u32 = 0;
-    // path_segments[i] is the key/index of the container at depth i+1
-    // (i.e. the segment that points INTO that depth).
-    let mut path_segments: Vec<String> = Vec::new();
-    let mut next_index_per_depth: Vec<u32> = Vec::new();
-    let mut pending_key: Option<String> = None;
+    let mut pending_key: Option<String> = scoped_pending_key;
 
     let do_keys = matches!(query.scope, SearchScope::Both | SearchScope::Keys);
     let do_values = matches!(query.scope, SearchScope::Both | SearchScope::Values);
 
-    let total_bytes_len = bytes.len() as u64;
+    let total_bytes_len = slice.len() as u64;
     let mut last_progress_at: u64 = 0;
 
     loop {
@@ -323,6 +367,7 @@ mod tests {
                 mode: SearchMode::Substring,
                 case_sensitive: true,
                 scope: SearchScope::Both,
+                from_node: None,
             },
             &cancel,
             |hit| hits.push(hit.clone()),
@@ -347,6 +392,7 @@ mod tests {
                 mode: SearchMode::Substring,
                 case_sensitive: false,
                 scope: SearchScope::Values,
+                from_node: None,
             },
             &cancel,
             |h| hits.push(h.clone()),
@@ -368,6 +414,7 @@ mod tests {
                 mode: SearchMode::Substring,
                 case_sensitive: true,
                 scope: SearchScope::Keys,
+                from_node: None,
             },
             &cancel,
             |h| hits.push(h.clone()),
@@ -390,6 +437,7 @@ mod tests {
                 mode: SearchMode::Substring,
                 case_sensitive: false,
                 scope: SearchScope::Both,
+                from_node: None,
             },
             &cancel,
             |h| hits.push(h.clone()),
@@ -411,6 +459,7 @@ mod tests {
                 mode: SearchMode::Regex,
                 case_sensitive: true,
                 scope: SearchScope::Values,
+                from_node: None,
             },
             &cancel,
             |hit| hits.push(hit.clone()),
@@ -432,6 +481,7 @@ mod tests {
                 mode: SearchMode::Regex,
                 case_sensitive: true,
                 scope: SearchScope::Both,
+                from_node: None,
             },
             &cancel,
             |_| {},
@@ -453,6 +503,7 @@ mod tests {
                 mode: SearchMode::Regex,
                 case_sensitive: false,
                 scope: SearchScope::Values,
+                from_node: None,
             },
             &cancel,
             |hit| hits.push(hit.clone()),
@@ -460,5 +511,77 @@ mod tests {
         )
         .unwrap();
         assert_eq!(hits.len(), 1);
+    }
+
+    #[test]
+    fn subtree_scope_excludes_outside_hits() {
+        let s = small_session();
+        let users = s
+            .get_children(NodeId::ROOT, 0, 100)
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|c| c.key == "users")
+            .unwrap();
+        let users_id = users.id.unwrap();
+        let user0 = s
+            .get_children(users_id, 0, 100)
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|c| c.key == "0")
+            .unwrap();
+        let user0_id = user0.id.unwrap();
+
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut hits = Vec::new();
+        run_search(
+            &s,
+            &SearchQuery {
+                needle: "name".into(),
+                mode: SearchMode::Substring,
+                case_sensitive: true,
+                scope: SearchScope::Keys,
+                from_node: Some(user0_id),
+            },
+            &cancel,
+            |hit| hits.push(hit.clone()),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].path, "/users/0/name");
+    }
+
+    #[test]
+    fn subtree_scope_emits_absolute_paths() {
+        let s = small_session();
+        let users = s
+            .get_children(NodeId::ROOT, 0, 100)
+            .unwrap()
+            .items
+            .into_iter()
+            .find(|c| c.key == "users")
+            .unwrap();
+        let users_id = users.id.unwrap();
+
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut hits = Vec::new();
+        run_search(
+            &s,
+            &SearchQuery {
+                needle: "Alice".into(),
+                mode: SearchMode::Substring,
+                case_sensitive: true,
+                scope: SearchScope::Values,
+                from_node: Some(users_id),
+            },
+            &cancel,
+            |hit| hits.push(hit.clone()),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].path, "/users/0/name");
     }
 }
