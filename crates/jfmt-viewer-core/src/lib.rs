@@ -11,4 +11,5 @@ pub mod types;
 
 pub use error::{Result, ViewerError};
 pub use index::{IndexMode, SparseIndex};
+pub use ndjson::is_ndjson_path;
 pub use types::{ChildSummary, ContainerEntry, ContainerKind, KeyRef, Kind, NodeId};
