@@ -5,5 +5,7 @@
 
 pub mod error;
 pub mod pointer;
+pub mod types;
 
 pub use error::{Result, ViewerError};
+pub use types::{ChildSummary, ContainerEntry, ContainerKind, KeyRef, Kind, NodeId};
