@@ -16,6 +16,9 @@ pub struct EventReader<R: Read> {
     pending_event: Option<XmlEvent>,
     /// Set once on Eof so subsequent calls keep returning `Ok(None)`.
     finished: bool,
+    /// Number of currently-open Start tags (decremented on End). Used to
+    /// detect unclosed elements at Eof.
+    depth: usize,
 }
 
 impl<R: Read> EventReader<R> {
@@ -28,15 +31,27 @@ impl<R: Read> EventReader<R> {
             pending_end: None,
             pending_event: None,
             finished: false,
+            depth: 0,
         }
     }
 
     pub fn next_event(&mut self) -> Result<Option<XmlEvent>> {
-        // Return any previously buffered event first.
+        // Return any previously buffered event first. These paths bypass the
+        // main match, so adjust depth here.
         if let Some(ev) = self.pending_end.take() {
+            // Synthesized EndTag from an Empty element — its Start was already
+            // counted, so close it now.
+            if matches!(ev, XmlEvent::EndTag { .. }) {
+                self.depth = self.depth.saturating_sub(1);
+            }
             return Ok(Some(ev));
         }
         if let Some(ev) = self.pending_event.take() {
+            match &ev {
+                XmlEvent::StartTag { .. } => self.depth += 1,
+                XmlEvent::EndTag { .. } => self.depth = self.depth.saturating_sub(1),
+                _ => {}
+            }
             return Ok(Some(ev));
         }
         if self.finished {
@@ -58,14 +73,22 @@ impl<R: Read> EventReader<R> {
             match event {
                 QxEvent::Eof => {
                     self.finished = true;
+                    if self.depth > 0 {
+                        return Err(make_err(
+                            self.inner.buffer_position(),
+                            format!("unexpected EOF: {} unclosed element(s)", self.depth),
+                        ));
+                    }
                     return Ok(None);
                 }
                 QxEvent::Start(e) => {
                     let ev = start_from(&e, self.inner.decoder())?;
+                    self.depth += 1;
                     return Ok(Some(ev));
                 }
                 QxEvent::End(e) => {
                     let name = decode_name(e.name().as_ref())?;
+                    self.depth = self.depth.saturating_sub(1);
                     return Ok(Some(XmlEvent::EndTag { name }));
                 }
                 QxEvent::Empty(e) => {
@@ -74,6 +97,7 @@ impl<R: Read> EventReader<R> {
                         XmlEvent::StartTag { name, .. } => name.clone(),
                         _ => unreachable!(),
                     };
+                    self.depth += 1;
                     self.pending_end = Some(XmlEvent::EndTag { name });
                     return Ok(Some(start));
                 }
@@ -106,8 +130,53 @@ impl<R: Read> EventReader<R> {
                     self.accumulate_text(&mut text)?;
                     return Ok(Some(XmlEvent::Text(text)));
                 }
-                // Comments, PIs, CDATA, declarations — skip and continue the loop.
-                _ => continue,
+                QxEvent::CData(e) => {
+                    let pos = self.inner.buffer_position();
+                    let s = std::str::from_utf8(e.as_ref())
+                        .map_err(|err| make_err(pos, format!("CDATA decode: {err}")))?
+                        .to_owned();
+                    return Ok(Some(XmlEvent::CData(s)));
+                }
+                QxEvent::Comment(e) => {
+                    let pos = self.inner.buffer_position();
+                    let s = std::str::from_utf8(e.as_ref())
+                        .map_err(|err| make_err(pos, format!("comment decode: {err}")))?
+                        .to_owned();
+                    return Ok(Some(XmlEvent::Comment(s)));
+                }
+                QxEvent::PI(e) => {
+                    let pos = self.inner.buffer_position();
+                    let raw = std::str::from_utf8(e.as_ref())
+                        .map_err(|err| make_err(pos, format!("PI decode: {err}")))?;
+                    let (target, data) = match raw.split_once(char::is_whitespace) {
+                        Some((t, d)) => (t.to_owned(), d.trim_start().to_owned()),
+                        None => (raw.to_owned(), String::new()),
+                    };
+                    return Ok(Some(XmlEvent::Pi { target, data }));
+                }
+                QxEvent::Decl(e) => {
+                    let pos = self.inner.buffer_position();
+                    let version = e
+                        .version()
+                        .map_err(|err| make_err(pos, format!("decl version: {err}")))?;
+                    let encoding = e
+                        .encoding()
+                        .transpose()
+                        .map_err(|err| make_err(pos, format!("decl encoding: {err}")))?
+                        .map(|c| String::from_utf8_lossy(&c).into_owned());
+                    let standalone = e
+                        .standalone()
+                        .transpose()
+                        .map_err(|err| make_err(pos, format!("decl standalone: {err}")))?
+                        .map(|c| c.as_ref() == b"yes");
+                    return Ok(Some(XmlEvent::Decl {
+                        version: String::from_utf8_lossy(&version).into_owned(),
+                        encoding,
+                        standalone,
+                    }));
+                }
+                // DocType (DTD) is out of scope per the spec — skip silently.
+                QxEvent::DocType(_) => continue,
             }
         }
     }
@@ -178,9 +247,8 @@ impl<R: Read> EventReader<R> {
 fn resolve_entity(name: &str, pos: u64) -> Result<&'static str> {
     // Handle numeric character references (&#nn; or &#xhh;) — rare here since
     // quick-xml resolves char refs itself before emitting GeneralRef, but guard anyway.
-    resolve_predefined_entity(name).ok_or_else(|| {
-        make_err(pos, format!("unknown XML entity: &{name};"))
-    })
+    resolve_predefined_entity(name)
+        .ok_or_else(|| make_err(pos, format!("unknown XML entity: &{name};")))
 }
 
 fn start_from(
@@ -236,7 +304,9 @@ mod tests {
     fn empty_element() {
         let evs = collect("<a/>");
         assert_eq!(evs.len(), 2);
-        assert!(matches!(&evs[0], XmlEvent::StartTag { name, attrs } if name == "a" && attrs.is_empty()));
+        assert!(
+            matches!(&evs[0], XmlEvent::StartTag { name, attrs } if name == "a" && attrs.is_empty())
+        );
         assert!(matches!(&evs[1], XmlEvent::EndTag { name } if name == "a"));
     }
 
@@ -263,7 +333,11 @@ mod tests {
     fn text_entity_unescaping() {
         let evs = collect("<a>&amp;&lt;&gt;</a>");
         assert_eq!(evs.len(), 3);
-        assert!(matches!(&evs[1], XmlEvent::Text(t) if t == "&<>"), "got: {:?}", evs[1]);
+        assert!(
+            matches!(&evs[1], XmlEvent::Text(t) if t == "&<>"),
+            "got: {:?}",
+            evs[1]
+        );
     }
 
     #[test]
@@ -282,6 +356,48 @@ mod tests {
                 );
             }
             other => panic!("expected StartTag, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn attributes_and_namespace() {
+        let evs = collect(r#"<ns:foo xmlns:ns="http://x" k="v"/>"#);
+        assert!(matches!(&evs[0], XmlEvent::StartTag { name, attrs }
+            if name == "ns:foo"
+            && attrs == &vec![
+                ("xmlns:ns".to_string(), "http://x".to_string()),
+                ("k".to_string(), "v".to_string()),
+            ]
+        ));
+    }
+
+    #[test]
+    fn cdata_block() {
+        let evs = collect("<a><![CDATA[raw <b>]]></a>");
+        assert!(matches!(&evs[1], XmlEvent::CData(t) if t == "raw <b>"));
+    }
+
+    #[test]
+    fn comment_and_pi() {
+        let evs = collect(r#"<?xml version="1.0"?><!-- hi --><?stylesheet href="a.xsl"?><a/>"#);
+        // Decl, Comment, PI, StartTag, EndTag
+        assert!(matches!(&evs[0], XmlEvent::Decl { version, .. } if version == "1.0"));
+        assert!(matches!(&evs[1], XmlEvent::Comment(t) if t.trim() == "hi"));
+        assert!(
+            matches!(&evs[2], XmlEvent::Pi { target, data } if target == "stylesheet" && data.contains("a.xsl"))
+        );
+        assert!(matches!(&evs[3], XmlEvent::StartTag { name, .. } if name == "a"));
+    }
+
+    #[test]
+    fn unclosed_element_errors() {
+        let mut r = EventReader::new("<a>".as_bytes());
+        loop {
+            match r.next_event() {
+                Ok(Some(_)) => continue,
+                Ok(None) => panic!("expected parse error, got Eof"),
+                Err(_) => break,
+            }
         }
     }
 }
