@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { closeFile, NodeId, openFile } from "./api";
+import { copyPointer } from "./lib/clipboard";
 import { Tree } from "./components/Tree";
 import { Preview } from "./components/Preview";
 
@@ -16,6 +17,30 @@ export function App() {
   const [session, setSession] = useState<OpenSession | null>(null);
   const [progress, setProgress] = useState<string>("");
   const [selected, setSelected] = useState<NodeId | null>(null);
+  const [pointerHint, setPointerHint] = useState<string>("");
+
+  async function copyCurrentPointer() {
+    if (!session || selected === null) return;
+    const p = await copyPointer(session.sessionId, selected);
+    setPointerHint(`copied: ${p || "(root)"}`);
+    setTimeout(() => setPointerHint(""), 2000);
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const isCopy = (e.ctrlKey || e.metaKey) && e.key === "c";
+      if (isCopy && session && selected !== null) {
+        const sel = window.getSelection();
+        if (sel && sel.toString().length === 0) {
+          e.preventDefault();
+          copyCurrentPointer();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, selected]);
 
   async function pickFile() {
     const picked = await open({
@@ -60,6 +85,20 @@ export function App() {
         {session && (
           <span style={{ marginLeft: 16, color: "#444", fontSize: 12 }}>
             {session.path} · {session.format} · {session.totalBytes} bytes
+          </span>
+        )}
+        {session && selected !== null && (
+          <button
+            onClick={copyCurrentPointer}
+            title="Copy JSON Pointer (Ctrl+C with no text selected)"
+            style={{ marginLeft: 8 }}
+          >
+            📋 Copy ptr
+          </button>
+        )}
+        {pointerHint && (
+          <span style={{ marginLeft: 8, color: "#080", fontSize: 12 }}>
+            {pointerHint}
           </span>
         )}
       </header>
