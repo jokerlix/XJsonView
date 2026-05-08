@@ -25,6 +25,56 @@ pub enum Command {
     Validate(ValidateArgs),
     /// Filter JSON / NDJSON with a jq expression.
     Filter(FilterArgs),
+    /// Convert between JSON and XML.
+    Convert(ConvertArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ConvertArgs {
+    /// Input file. Omit to read from stdin (then --from is required).
+    pub input: Option<std::path::PathBuf>,
+
+    /// Output file. Omit to write to stdout.
+    #[arg(short = 'o', long = "output")]
+    pub output: Option<std::path::PathBuf>,
+
+    /// Input format. Required when reading from stdin.
+    #[arg(long, value_enum)]
+    pub from: Option<crate::commands::convert::format::Format>,
+
+    /// Output format. Required when writing to stdout without --to inferable.
+    #[arg(long, value_enum)]
+    pub to: Option<crate::commands::convert::format::Format>,
+
+    /// XML→JSON: comma-separated dotted paths whose elements collapse to
+    /// scalar/object instead of always-array.
+    #[arg(long = "array-rule")]
+    pub array_rule: Option<String>,
+
+    /// JSON→XML: wrap output in <NAME>...</NAME>.
+    #[arg(long)]
+    pub root: Option<String>,
+
+    /// Pretty-print output.
+    #[arg(long)]
+    pub pretty: bool,
+
+    /// Indent width (spaces). Implies --pretty.
+    #[arg(long)]
+    pub indent: Option<usize>,
+
+    /// Use tabs for indent. Implies --pretty.
+    #[arg(long)]
+    pub tabs: bool,
+
+    /// JSON→XML: emit <?xml version="1.0" encoding="UTF-8"?> prologue.
+    #[arg(long = "xml-decl")]
+    pub xml_decl: bool,
+
+    /// Strict mode: error on non-contiguous same-name siblings (XML→JSON);
+    /// forbid --root rescue when JSON top-level has multiple keys.
+    #[arg(long)]
+    pub strict: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

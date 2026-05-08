@@ -11,6 +11,12 @@ pub enum ExitCode {
     SyntaxError = 2,
     /// JSON-Schema validation failure (reserved for M5).
     SchemaError = 3,
+    /// Malformed XML input.
+    XmlSyntax = 21,
+    /// Strict mode violation: non-contiguous same-name siblings (XML→JSON).
+    StrictNonContiguous = 34,
+    /// Translation error converting between JSON and XML.
+    Translation = 40,
 }
 
 impl ExitCode {

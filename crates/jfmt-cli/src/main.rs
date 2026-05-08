@@ -43,6 +43,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Minify(args) => commands::minify::run(args, threads),
         Command::Validate(args) => commands::validate::run(args, threads),
         Command::Filter(args) => commands::filter::run(args, threads),
+        Command::Convert(args) => commands::convert::run(args),
     }
 }
 
@@ -58,6 +59,11 @@ fn classify(e: &anyhow::Error) -> ExitCode {
             jfmt_core::FilterError::Parse { .. } | jfmt_core::FilterError::Aggregate { .. }
         ) {
             return ExitCode::SyntaxError;
+        }
+    }
+    if let Some(xml_err) = e.downcast_ref::<jfmt_xml::XmlError>() {
+        if matches!(xml_err, jfmt_xml::XmlError::Parse { .. }) {
+            return ExitCode::XmlSyntax;
         }
     }
     ExitCode::InputError

@@ -1006,6 +1006,7 @@ dependencies = [
  "flate2",
  "jfmt-core",
  "jfmt-io",
+ "jfmt-xml",
  "predicates",
  "serde_json",
  "sysinfo",
