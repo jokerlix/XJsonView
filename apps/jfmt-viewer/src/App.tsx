@@ -72,6 +72,27 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, selected]);
 
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const f = url.searchParams.get("file");
+    if (f) {
+      (async () => {
+        setProgress("opening…");
+        const resp = await openFile(f, (p) => {
+          if (p.phase === "ready") setProgress(`ready (${p.build_ms} ms)`);
+        });
+        setSession({
+          sessionId: resp.session_id,
+          rootId: resp.root_id,
+          path: f,
+          totalBytes: resp.total_bytes,
+          format: resp.format,
+        });
+      })();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function pickFile() {
     const picked = await open({
       multiple: false,

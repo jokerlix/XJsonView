@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "e2e": "cd e2e && pnpm install --frozen-lockfile=false && pnpm test"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3",
