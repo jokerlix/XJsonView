@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { closeFile, NodeId, openFile } from "./api";
-import { Tree } from "./components/Tree";
+import { Tree, TreeHandle } from "./components/Tree";
 import { Preview } from "./components/Preview";
 import { SearchBar } from "./components/SearchBar";
+import { HitList } from "./components/HitList";
 import { useSearch } from "./lib/searchState";
 import { copyPointer } from "./lib/clipboard";
 
@@ -28,6 +29,25 @@ export function App() {
   useEffect(() => {
     setSearchCursor(0);
   }, [searchState.query.needle, searchState.query.scope, searchState.query.case_sensitive]);
+
+  const treeRef = useRef<TreeHandle>(null);
+
+  async function jumpToHit(idx: number) {
+    setSearchCursor(idx);
+    const hit = searchState.hits[idx];
+    if (!hit) return;
+    const id = await treeRef.current?.expandToPointer(hit.path);
+    if (id !== null && id !== undefined) {
+      setSelected(id);
+    }
+  }
+
+  useEffect(() => {
+    if (searchState.hits.length > 0 && searchCursor < searchState.hits.length) {
+      jumpToHit(searchCursor);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchCursor]);
 
   async function copyCurrentPointer() {
     if (!session || selected === null) return;
@@ -125,8 +145,10 @@ export function App() {
       </header>
       {session && (
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          <HitList state={searchState} cursor={searchCursor} onPick={jumpToHit} />
           <div style={{ flex: "0 0 40%", borderRight: "1px solid #ddd" }}>
             <Tree
+              ref={treeRef}
               sessionId={session.sessionId}
               rootId={session.rootId}
               onSelect={setSelected}

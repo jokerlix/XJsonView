@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChildSummary, getChildren, NodeId } from "../api";
 import { TreeRow } from "./TreeRow";
@@ -8,6 +8,10 @@ interface Props {
   rootId: NodeId;
   onSelect?: (node: NodeId | null) => void;
   selectedId?: NodeId | null;
+}
+
+export interface TreeHandle {
+  expandToPointer(pointer: string): Promise<NodeId | null>;
 }
 
 interface NodeState {
@@ -25,9 +29,44 @@ interface FlatRow {
 const PAGE_LIMIT = 200;
 const ROW_HEIGHT = 22;
 
-export function Tree({ sessionId, rootId, onSelect, selectedId }: Props) {
+export const Tree = forwardRef<TreeHandle, Props>(function Tree(
+  { sessionId, rootId, onSelect, selectedId },
+  ref,
+) {
   const [byId, setById] = useState<Map<NodeId, NodeState>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    async expandToPointer(pointer: string): Promise<NodeId | null> {
+      if (pointer === "") return rootId;
+      const segs = pointer
+        .split("/")
+        .slice(1)
+        .map((s) => s.replace(/~1/g, "/").replace(/~0/g, "~"));
+      let cur: NodeId = rootId;
+      let workingMap = byId;
+      for (const seg of segs) {
+        let state = workingMap.get(cur);
+        if (!state) {
+          const r = await getChildren(sessionId, cur, 0, PAGE_LIMIT);
+          state = { loaded: r.items, total: r.total, expanded: true };
+          workingMap = new Map(workingMap);
+          workingMap.set(cur, state);
+          setById(workingMap);
+        } else if (!state.expanded) {
+          state = { ...state, expanded: true };
+          workingMap = new Map(workingMap);
+          workingMap.set(cur, state);
+          setById(workingMap);
+        }
+        const child = state.loaded.find((c) => c.key === seg);
+        if (!child || child.id === null) return null;
+        cur = child.id;
+      }
+      onSelect?.(cur);
+      return cur;
+    },
+  }));
 
   useEffect(() => {
     let cancelled = false;
@@ -154,4 +193,4 @@ export function Tree({ sessionId, rootId, onSelect, selectedId }: Props) {
       </div>
     </div>
   );
-}
+});
