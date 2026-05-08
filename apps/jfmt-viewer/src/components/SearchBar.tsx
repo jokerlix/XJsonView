@@ -25,7 +25,7 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange }: 
       if (needle.trim() === "") {
         onCancel();
       } else {
-        onQuery({ needle, case_sensitive: caseSensitive, scope });
+        onQuery({ needle, mode: "substring", case_sensitive: caseSensitive, scope });
       }
     }, DEBOUNCE_MS);
     return () => {

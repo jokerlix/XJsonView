@@ -22,7 +22,7 @@ const HIT_CAP = 1000;
 
 export function useSearch(sessionId: string | null) {
   const [state, setState] = useState<SearchState>({
-    query: { needle: "", case_sensitive: false, scope: "both" },
+    query: { needle: "", mode: "substring", case_sensitive: false, scope: "both" },
     hits: [],
     totalSoFar: 0,
     scanning: false,

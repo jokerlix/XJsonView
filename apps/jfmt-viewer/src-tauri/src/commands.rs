@@ -268,3 +268,39 @@ pub async fn cancel_search(
     }
     Ok(())
 }
+
+#[derive(Serialize)]
+pub struct ExportSubtreeResp {
+    pub bytes_written: u64,
+    pub elapsed_ms: u64,
+}
+
+#[tauri::command]
+pub async fn export_subtree(
+    session_id: String,
+    node: u64,
+    target_path: String,
+    pretty: bool,
+    state: State<'_, ViewerState>,
+) -> Result<ExportSubtreeResp, ViewerError> {
+    let session = state
+        .sessions
+        .get(&session_id)
+        .ok_or(ViewerError::InvalidSession)?
+        .clone();
+    let started = Instant::now();
+    let target = std::path::PathBuf::from(target_path);
+    let bytes_written = tokio::task::spawn_blocking(move || {
+        session.export_subtree(
+            jfmt_viewer_core::NodeId(node),
+            &target,
+            jfmt_viewer_core::ExportOptions { pretty },
+        )
+    })
+    .await
+    .map_err(|e| ViewerError::Io(e.to_string()))??;
+    Ok(ExportSubtreeResp {
+        bytes_written,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+    })
+}

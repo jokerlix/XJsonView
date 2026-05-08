@@ -35,10 +35,14 @@ export interface GetChildrenResp {
   total: number;
 }
 
+export type SearchMode = "substring" | "regex";
+
 export interface SearchQuery {
   needle: string;
+  mode: SearchMode;
   case_sensitive: boolean;
   scope: "both" | "keys" | "values";
+  from_node?: NodeId;
 }
 
 export type SearchEvent =
@@ -103,4 +107,23 @@ export async function search(
 
 export async function cancelSearch(handle: string): Promise<void> {
   await invoke("cancel_search", { handle });
+}
+
+export interface ExportSubtreeResp {
+  bytes_written: number;
+  elapsed_ms: number;
+}
+
+export async function exportSubtree(
+  sessionId: string,
+  node: NodeId,
+  targetPath: string,
+  pretty: boolean,
+): Promise<ExportSubtreeResp> {
+  return invoke<ExportSubtreeResp>("export_subtree", {
+    sessionId,
+    node,
+    targetPath,
+    pretty,
+  });
 }

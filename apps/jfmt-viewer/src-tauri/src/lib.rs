@@ -14,6 +14,7 @@ pub fn run() {
             commands::get_pointer,
             commands::search,
             commands::cancel_search,
+            commands::export_subtree,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
