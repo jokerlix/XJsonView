@@ -4,3 +4,4 @@ pub mod minify;
 pub mod pretty;
 pub mod ram_budget;
 pub mod validate;
+pub mod view;

@@ -27,6 +27,11 @@ pub enum Command {
     Filter(FilterArgs),
     /// Convert between JSON and XML.
     Convert(ConvertArgs),
+    /// Launch the GUI viewer for a JSON / NDJSON file.
+    View {
+        /// File to open.
+        file: PathBuf,
+    },
 }
 
 #[derive(Debug, Args)]

@@ -48,6 +48,7 @@ fn run(cli: Cli) -> anyhow::Result<()> {
         Command::Validate(args) => commands::validate::run(args, threads),
         Command::Filter(args) => commands::filter::run(args, threads),
         Command::Convert(args) => commands::convert::run(args),
+        Command::View { file } => commands::view::run(file),
     }
 }
 
