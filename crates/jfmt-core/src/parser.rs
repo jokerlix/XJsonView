@@ -3,7 +3,7 @@
 use crate::error::{Error, Result};
 use crate::event::{Event, Scalar};
 use std::io::Read;
-use struson::reader::{JsonReader, JsonStreamReader, ReaderError, ValueType};
+use struson::reader::{JsonReader, JsonStreamReader, ReaderError, ReaderSettings, ValueType};
 
 /// A pull-based iterator of [`Event`]s over a JSON byte stream.
 ///
@@ -28,6 +28,23 @@ impl<R: Read> EventReader<R> {
     pub fn new(source: R) -> Self {
         Self {
             inner: JsonStreamReader::new(source),
+            stack: Vec::new(),
+            done: false,
+            expect_name: false,
+        }
+    }
+
+    /// Create a reader with no nesting-depth limit.
+    ///
+    /// The default constructor caps nesting at 128 (struson's default).
+    /// Use this variant when indexing deeply nested files.
+    pub fn new_unlimited(source: R) -> Self {
+        let settings = ReaderSettings {
+            max_nesting_depth: None,
+            ..ReaderSettings::default()
+        };
+        Self {
+            inner: JsonStreamReader::new_custom(source, settings),
             stack: Vec::new(),
             done: false,
             expect_name: false,

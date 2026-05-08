@@ -1,0 +1,10 @@
+{
+  "users": [
+    {"id": 1, "name": "Alice"},
+    {"id": 2, "name": "Bob"}
+  ],
+  "meta": {
+    "version": "2.1",
+    "tags": ["prod", "v2"]
+  }
+}

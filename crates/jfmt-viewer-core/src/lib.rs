@@ -4,8 +4,11 @@
 //! wrappers.
 
 pub mod error;
+pub mod index;
+pub mod ndjson;
 pub mod pointer;
 pub mod types;
 
 pub use error::{Result, ViewerError};
+pub use index::{IndexMode, SparseIndex};
 pub use types::{ChildSummary, ContainerEntry, ContainerKind, KeyRef, Kind, NodeId};
