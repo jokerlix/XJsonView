@@ -22,9 +22,6 @@ pub struct OpenFileResp {
 
 #[derive(Serialize, Clone)]
 #[serde(tag = "phase", rename_all = "lowercase")]
-#[allow(dead_code)] // Error variant emitted in M8.2 when index errors are
-                    // surfaced through the channel; kept here so the frontend
-                    // discriminated union stays stable.
 pub enum IndexProgress {
     Scanning { bytes_done: u64, bytes_total: u64 },
     Ready { build_ms: u64 },
@@ -42,18 +39,39 @@ pub async fn open_file(
         return Err(ViewerError::NotFound(path.display().to_string()));
     }
     let start = Instant::now();
-    let session = tokio::task::spawn_blocking(move || Session::open(&path))
-        .await
-        .map_err(|e| ViewerError::Io(e.to_string()))??;
+    let on_progress_for_open = on_progress.clone();
+    let session_result = tokio::task::spawn_blocking(move || {
+        Session::open_with_progress(&path, |done, total| {
+            let _ = on_progress_for_open.send(IndexProgress::Scanning {
+                bytes_done: done,
+                bytes_total: total,
+            });
+        })
+    })
+    .await;
+
+    let session = match session_result {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            let _ = on_progress.send(IndexProgress::Error {
+                message: e.to_string(),
+            });
+            return Err(e);
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            let _ = on_progress.send(IndexProgress::Error {
+                message: msg.clone(),
+            });
+            return Err(ViewerError::Io(msg));
+        }
+    };
+
     let id = uuid::Uuid::new_v4().to_string();
     let total = session.byte_len();
     let format = session.format();
     state.sessions.insert(id.clone(), Arc::new(session));
 
-    let _ = on_progress.send(IndexProgress::Scanning {
-        bytes_done: total,
-        bytes_total: total,
-    });
     let _ = on_progress.send(IndexProgress::Ready {
         build_ms: start.elapsed().as_millis() as u64,
     });
@@ -148,9 +166,6 @@ pub async fn get_pointer(
 
 #[derive(Serialize, Clone)]
 #[serde(tag = "kind", rename_all = "lowercase")]
-#[allow(dead_code)] // Progress + Error variants constructed in M8.2 once
-                    // run_search emits intermediate events; kept here so the
-                    // frontend's TypeScript union type stays stable.
 pub enum SearchEvent {
     Hit {
         node: Option<u64>,
@@ -200,14 +215,27 @@ pub async fn search(
     let cancel_clone = cancel.clone();
     let started = Instant::now();
     tokio::task::spawn_blocking(move || {
-        let result = run_search(&session, &query, &cancel_clone, |hit: &SearchHit| {
-            let _ = on_event_clone.send(SearchEvent::Hit {
-                node: hit.node.map(|n| n.0),
-                path: hit.path.clone(),
-                matched_in: hit.matched_in,
-                snippet: hit.snippet.clone(),
-            });
-        });
+        let on_event_progress = on_event_clone.clone();
+        let result = run_search(
+            &session,
+            &query,
+            &cancel_clone,
+            |hit: &SearchHit| {
+                let _ = on_event_clone.send(SearchEvent::Hit {
+                    node: hit.node.map(|n| n.0),
+                    path: hit.path.clone(),
+                    matched_in: hit.matched_in,
+                    snippet: hit.snippet.clone(),
+                });
+            },
+            |bytes_done, bytes_total, hits_so_far| {
+                let _ = on_event_progress.send(SearchEvent::Progress {
+                    bytes_done,
+                    bytes_total,
+                    hits_so_far,
+                });
+            },
+        );
         let elapsed_ms = started.elapsed().as_millis() as u64;
         match result {
             Ok(s) if s.cancelled => {

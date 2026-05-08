@@ -49,11 +49,12 @@ pub struct SearchSummary {
 
 const SNIPPET_RADIUS: usize = 32;
 
-pub fn run_search(
+pub fn run_search<F: FnMut(u64, u64, u32)>(
     session: &Session,
     query: &SearchQuery,
     cancel: &Arc<AtomicBool>,
     mut on_hit: impl FnMut(&SearchHit),
+    mut on_progress: F,
 ) -> Result<SearchSummary> {
     if cancel.load(Ordering::Relaxed) {
         return Ok(SearchSummary {
@@ -88,12 +89,20 @@ pub fn run_search(
     let do_keys = matches!(query.scope, SearchScope::Both | SearchScope::Keys);
     let do_values = matches!(query.scope, SearchScope::Both | SearchScope::Values);
 
+    let total_bytes_len = bytes.len() as u64;
+    let mut last_progress_at: u64 = 0;
+
     loop {
         if cancel.load(Ordering::Relaxed) {
             return Ok(SearchSummary {
                 total_hits: total,
                 cancelled: true,
             });
+        }
+        let now_pos = reader.byte_offset();
+        if now_pos.saturating_sub(last_progress_at) >= 1_048_576 {
+            on_progress(now_pos, total_bytes_len, total);
+            last_progress_at = now_pos;
         }
         let pos = reader.byte_offset();
         let ev = match reader.next_event() {
@@ -155,6 +164,7 @@ pub fn run_search(
         }
     }
 
+    on_progress(total_bytes_len, total_bytes_len, total);
     Ok(SearchSummary {
         total_hits: total,
         cancelled: false,
@@ -233,10 +243,7 @@ mod tests {
     use std::sync::Arc;
 
     fn small_session() -> Session {
-        let path = format!(
-            "{}/tests/fixtures/small.json",
-            env!("CARGO_MANIFEST_DIR")
-        );
+        let path = format!("{}/tests/fixtures/small.json", env!("CARGO_MANIFEST_DIR"));
         Session::open(path).unwrap()
     }
 
@@ -254,6 +261,7 @@ mod tests {
             },
             &cancel,
             |hit| hits.push(hit.clone()),
+            |_, _, _| {},
         )
         .unwrap();
         assert_eq!(summary.total_hits, 1);
@@ -276,6 +284,7 @@ mod tests {
             },
             &cancel,
             |h| hits.push(h.clone()),
+            |_, _, _| {},
         )
         .unwrap();
         assert_eq!(hits.len(), 1);
@@ -295,6 +304,7 @@ mod tests {
             },
             &cancel,
             |h| hits.push(h.clone()),
+            |_, _, _| {},
         )
         .unwrap();
         assert!(hits.iter().all(|h| h.matched_in == MatchedIn::Key));
@@ -315,6 +325,7 @@ mod tests {
             },
             &cancel,
             |h| hits.push(h.clone()),
+            |_, _, _| {},
         )
         .unwrap();
         assert!(summary.cancelled);

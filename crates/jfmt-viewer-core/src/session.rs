@@ -45,12 +45,18 @@ pub struct Session {
 
 impl Session {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
+        Self::open_with_progress(path, |_, _| {})
+    }
+
+    pub fn open_with_progress<P: AsRef<Path>, F: FnMut(u64, u64)>(
+        path: P,
+        on_progress: F,
+    ) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let bytes = std::fs::read(&path).map_err(|e| match e.kind() {
             std::io::ErrorKind::NotFound => ViewerError::NotFound(path.display().to_string()),
             _ => ViewerError::Io(e.to_string()),
         })?;
-
         let format = if is_ndjson_path(&path) {
             Format::Ndjson
         } else {
@@ -60,8 +66,7 @@ impl Session {
             Format::Json => IndexMode::Json,
             Format::Ndjson => IndexMode::Ndjson,
         };
-        let index = SparseIndex::build(&bytes, mode)?;
-
+        let index = SparseIndex::build_with_progress(&bytes, mode, on_progress)?;
         Ok(Self {
             path,
             bytes,
@@ -220,12 +225,11 @@ impl Session {
         let slice = &self.bytes[actual_start..raw_end];
 
         // Parse with serde_json and re-serialize pretty.
-        let value: serde_json::Value = serde_json::from_slice(slice).map_err(|e| {
-            ViewerError::Parse {
+        let value: serde_json::Value =
+            serde_json::from_slice(slice).map_err(|e| ViewerError::Parse {
                 pos: entry.file_offset,
                 msg: e.to_string(),
-            }
-        })?;
+            })?;
         let pretty = serde_json::to_string_pretty(&value).map_err(|e| ViewerError::Parse {
             pos: entry.file_offset,
             msg: e.to_string(),
