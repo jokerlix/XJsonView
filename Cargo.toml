@@ -47,6 +47,8 @@ jsonschema = "=0.18.3"
 criterion = "=0.5.1"
 # XML support (M7).
 quick-xml = "=0.39.2"
+# M9 — regex search.
+regex = "1"
 # GUI viewer core (M8). memchr for fast byte scanning; smallvec for
 # inline node children without heap allocation for small trees.
 memchr = "2"

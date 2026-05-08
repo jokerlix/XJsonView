@@ -21,6 +21,9 @@ pub enum ViewerError {
     #[error("parse error at byte {pos}: {msg}")]
     Parse { pos: u64, msg: String },
 
+    #[error("invalid query: {0}")]
+    InvalidQuery(String),
+
     #[error("io: {0}")]
     Io(String),
 }
@@ -74,5 +77,13 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "x");
         let v: ViewerError = io_err.into();
         assert!(matches!(v, ViewerError::Io(_)));
+    }
+
+    #[test]
+    fn invalid_query_displays_with_message() {
+        let err = ViewerError::InvalidQuery("unbalanced ( in pattern".into());
+        assert_eq!(err.to_string(), "invalid query: unbalanced ( in pattern");
+        let s = serde_json::to_string(&err).unwrap();
+        assert!(s.contains("InvalidQuery"), "got {s}");
     }
 }

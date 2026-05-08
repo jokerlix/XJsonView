@@ -2141,6 +2141,7 @@ dependencies = [
  "jfmt-core",
  "memchr",
  "proptest",
+ "regex",
  "serde",
  "serde_json",
  "smallvec",

@@ -14,8 +14,18 @@ use jfmt_core::parser::EventReader;
 #[derive(Debug, Clone, Deserialize)]
 pub struct SearchQuery {
     pub needle: String,
+    #[serde(default)]
+    pub mode: SearchMode,
     pub case_sensitive: bool,
     pub scope: SearchScope,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchMode {
+    #[default]
+    Substring,
+    Regex,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -256,6 +266,7 @@ mod tests {
             &s,
             &SearchQuery {
                 needle: "Alice".into(),
+                mode: SearchMode::Substring,
                 case_sensitive: true,
                 scope: SearchScope::Both,
             },
@@ -279,6 +290,7 @@ mod tests {
             &s,
             &SearchQuery {
                 needle: "alice".into(),
+                mode: SearchMode::Substring,
                 case_sensitive: false,
                 scope: SearchScope::Values,
             },
@@ -299,6 +311,7 @@ mod tests {
             &s,
             &SearchQuery {
                 needle: "name".into(),
+                mode: SearchMode::Substring,
                 case_sensitive: true,
                 scope: SearchScope::Keys,
             },
@@ -320,6 +333,7 @@ mod tests {
             &s,
             &SearchQuery {
                 needle: "x".into(),
+                mode: SearchMode::Substring,
                 case_sensitive: false,
                 scope: SearchScope::Both,
             },
