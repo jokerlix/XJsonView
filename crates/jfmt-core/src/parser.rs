@@ -150,10 +150,7 @@ impl<R: Read> EventReader<R> {
     /// Returns 0 if the underlying reader does not track positions
     /// (currently always available with `JsonStreamReader`).
     pub fn byte_offset(&self) -> u64 {
-        self.inner
-            .current_position(false)
-            .data_pos
-            .unwrap_or(0)
+        self.inner.current_position(false).data_pos.unwrap_or(0)
     }
 
     /// After the top-level value has been consumed, verify no non-whitespace

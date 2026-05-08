@@ -1,0 +1,18 @@
+[package]
+name = "jfmt-viewer-app"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "jfmt GUI viewer (Tauri 2)"
+default-run = "jfmt-viewer-app"
+
+[dependencies]
+jfmt-viewer-core = { path = "../../../crates/jfmt-viewer-core" }
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

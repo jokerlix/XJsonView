@@ -45,15 +45,25 @@ mod tests {
         assert_eq!(ViewerError::InvalidNode.to_string(), "node out of range");
         assert_eq!(ViewerError::NotReady.to_string(), "indexing in progress");
         assert_eq!(
-            ViewerError::Parse { pos: 42, msg: "bad".into() }.to_string(),
+            ViewerError::Parse {
+                pos: 42,
+                msg: "bad".into()
+            }
+            .to_string(),
             "parse error at byte 42: bad"
         );
-        assert_eq!(ViewerError::Io("disk full".into()).to_string(), "io: disk full");
+        assert_eq!(
+            ViewerError::Io("disk full".into()).to_string(),
+            "io: disk full"
+        );
     }
 
     #[test]
     fn serializes_to_tagged_json() {
-        let err = ViewerError::Parse { pos: 7, msg: "oops".into() };
+        let err = ViewerError::Parse {
+            pos: 7,
+            msg: "oops".into(),
+        };
         let s = serde_json::to_string(&err).unwrap();
         assert!(s.contains("\"Parse\""), "got {s}");
         assert!(s.contains("\"pos\":7"), "got {s}");

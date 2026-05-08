@@ -1,11 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/jfmt-cli", "crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-viewer-core", "crates/jfmt-xml"]
+members = ["apps/jfmt-viewer/src-tauri", "crates/jfmt-cli", "crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-viewer-core", "crates/jfmt-xml"]
 
 [workspace.package]
 version = "0.2.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jokerlix/XJsonView"
 homepage = "https://github.com/jokerlix/XJsonView"
@@ -21,22 +21,21 @@ anyhow = "1"
 # I/O
 flate2 = "1"
 zstd = "0.13"
-# CLI — pinned to keep MSRV 1.75 (later clap pulls clap_lex 1.1.0 which
-# requires cargo edition2024, unavailable before 1.85).
+# CLI. Versions originally pinned to MSRV 1.75; M8 bumped MSRV to 1.85
+# (Tauri 2 transitive deps require edition2024). Pins are kept so the
+# lockfile is reproducible; bump as needed for new features.
 clap = { version = "=4.5.20", features = ["derive"] }
-# Test utilities — versions pinned to stay MSRV 1.75 compatible (later
-# releases pull transitive deps that require cargo edition2024).
+# Test utilities.
 assert_cmd = "=2.0.16"
 predicates = "=3.1.2"
 tempfile = "=3.14.0"
 proptest = "=1.5.0"
 serde = { version = "=1.0.217", features = ["derive"] }
 serde_json = "=1.0.132"
-# Concurrency — pinned to stay MSRV 1.75 compatible.
+# Concurrency.
 crossbeam-channel = "=0.5.11"
 num_cpus = "=1.16.0"
-# Embedded jq engine for filter command (M4a). Versions chosen via Task 1
-# spike (see docs/superpowers/specs Annex A). Pinned to keep MSRV 1.75.
+# Embedded jq engine for filter command (M4a).
 jaq-core = "=2.2.1"
 jaq-std = "=2.1.2"
 jaq-json = "=1.1.3"
@@ -44,14 +43,17 @@ jaq-json = "=1.1.3"
 sysinfo = "=0.30.13"
 # JSON Schema validation (M5).
 jsonschema = "=0.18.3"
-# Benchmarks (M6). Local cargo bench only; not in CI.
+# Benchmarks (M6).
 criterion = "=0.5.1"
-# XML support (M7). Pinned to keep MSRV 1.75.
+# XML support (M7).
 quick-xml = "=0.39.2"
 # GUI viewer core (M8). memchr for fast byte scanning; smallvec for
 # inline node children without heap allocation for small trees.
 memchr = "2"
 smallvec = { version = "1", features = ["serde"] }
+# Async runtime for Tauri commands that wrap blocking jfmt-viewer-core
+# calls in spawn_blocking.
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros"] }
 
 [profile.release]
 lto = "thin"

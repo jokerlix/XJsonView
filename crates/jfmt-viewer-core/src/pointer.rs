@@ -9,9 +9,8 @@ pub fn encode_pointer(segments: &[&str]) -> String {
     if segments.is_empty() {
         return String::new();
     }
-    let mut out = String::with_capacity(
-        segments.len() + segments.iter().map(|s| s.len()).sum::<usize>(),
-    );
+    let mut out =
+        String::with_capacity(segments.len() + segments.iter().map(|s| s.len()).sum::<usize>());
     for seg in segments {
         out.push('/');
         for c in seg.chars() {

@@ -5,3 +5,10 @@
 .vscode/
 .idea/
 target/criterion/
+
+# jfmt-viewer build outputs
+apps/*/node_modules/
+apps/*/dist/
+apps/*/src-tauri/target/
+apps/*/.vite/
+apps/*/pnpm-debug.log
