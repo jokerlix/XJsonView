@@ -122,6 +122,23 @@ impl<R: Read> EventReader<R> {
         self.stack.len()
     }
 
+    /// Byte offset of the next token in the input stream.
+    ///
+    /// Call before `next_event()` to capture the offset of the token about
+    /// to be consumed (e.g. the offset of the opening `{` for a container
+    /// that the next call returns as `StartObject`). After `next_event()`,
+    /// returns the offset *past* the consumed token (e.g. the byte after
+    /// the closing `}` for an `EndObject`).
+    ///
+    /// Returns 0 if the underlying reader does not track positions
+    /// (currently always available with `JsonStreamReader`).
+    pub fn byte_offset(&self) -> u64 {
+        self.inner
+            .current_position(false)
+            .data_pos
+            .unwrap_or(0)
+    }
+
     /// After the top-level value has been consumed, verify no non-whitespace
     /// bytes remain. Consumes the reader. Call this when strict validation
     /// is required (e.g. `validate_syntax`); transcoding paths typically skip it.
@@ -277,5 +294,20 @@ mod tests {
             }
             other => panic!("got {other:?}"),
         }
+    }
+
+    #[test]
+    fn byte_offset_advances_through_events() {
+        let mut r = EventReader::new(br#"{"a":1}"#.as_slice());
+        // Before first read, position is 0.
+        assert_eq!(r.byte_offset(), 0);
+        // StartObject consumes `{` (1 byte).
+        assert!(matches!(r.next_event().unwrap(), Some(Event::StartObject)));
+        let after_open = r.byte_offset();
+        assert!(after_open >= 1, "got {after_open}");
+        // Walk to end.
+        while r.next_event().unwrap().is_some() {}
+        // After EndObject, offset is past the closing brace (7 bytes total).
+        assert_eq!(r.byte_offset(), 7);
     }
 }
