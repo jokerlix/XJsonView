@@ -28,27 +28,116 @@ pub fn translate<R: Read, W: Write>(input: R, output: W, args: &ConvertArgs) -> 
     };
     let mut w = XmlWriter::with_config(output, cfg);
 
-    // Resolve the root element name.
-    let root_name = match &value {
-        serde_json::Value::Object(map) if map.len() == 1 && args.root.is_none() => {
-            map.keys().next().unwrap().clone()
+    // Resolve root.
+    let single_key_top = matches!(&value, serde_json::Value::Object(m) if m.len() == 1);
+    let root_name = if single_key_top && args.root.is_none() {
+        if let serde_json::Value::Object(m) = &value {
+            m.keys().next().unwrap().clone()
+        } else {
+            unreachable!()
         }
-        _ => args.root.clone().ok_or_else(|| {
+    } else {
+        let r = args.root.clone().ok_or_else(|| {
             anyhow!("JSON top level is not a single-key object; pass --root NAME to wrap it")
-        })?,
-    };
-
-    // If the value is the single-key object case, unwrap; otherwise the
-    // entire value becomes the root element's content.
-    let root_value = match &value {
-        serde_json::Value::Object(map) if map.len() == 1 && args.root.is_none() => {
-            map.values().next().unwrap().clone()
+        })?;
+        if args.strict && !single_key_top {
+            bail!("--strict: top-level not single-key object; --root rescue forbidden");
         }
-        _ => value,
+        r
     };
 
-    write_element(&mut w, &root_name, &root_value)?;
+    let root_value = if single_key_top && args.root.is_none() {
+        if let serde_json::Value::Object(m) = value {
+            m.into_iter().next().unwrap().1
+        } else {
+            unreachable!()
+        }
+    } else {
+        value
+    };
+
+    if single_key_top && args.root.is_none() {
+        // root_value was unwrapped from {root_name: value}; render that value as <root_name>.
+        write_element(&mut w, &root_name, &root_value)?;
+    } else {
+        // --root rescue: wrap the value as the body of <root_name>...</root_name>.
+        write_wrapped(&mut w, &root_name, &root_value)?;
+    }
     w.finish()?;
+    Ok(())
+}
+
+/// Emit `<name>...body...</name>` where the body is `value` rendered as
+/// inline content (object → child elements, array → repeated <name>,
+/// scalar → text).
+fn write_wrapped<W: Write>(
+    w: &mut XmlWriter<W>,
+    name: &str,
+    value: &serde_json::Value,
+) -> Result<()> {
+    use serde_json::Value;
+    // Object case: extract attrs/text/children just like write_element does
+    // for objects, but emit a single open/close around them.
+    if let Value::Object(map) = value {
+        let mut attrs: Vec<(String, String)> = Vec::new();
+        let mut text: Option<String> = None;
+        let mut children: Vec<(&String, &Value)> = Vec::new();
+        for (k, v) in map {
+            if let Some(attr_key) = k.strip_prefix('@') {
+                let s = match v {
+                    Value::String(s) => s.clone(),
+                    Value::Number(n) => n.to_string(),
+                    Value::Bool(b) => b.to_string(),
+                    Value::Null => String::new(),
+                    _ => bail!("attribute @{attr_key} must be scalar, got {}", describe(v)),
+                };
+                attrs.push((attr_key.to_string(), s));
+            } else if k == "#text" {
+                let s = match v {
+                    Value::String(s) => s.clone(),
+                    Value::Number(n) => n.to_string(),
+                    Value::Bool(b) => b.to_string(),
+                    Value::Null => String::new(),
+                    _ => bail!("#text must be scalar, got {}", describe(v)),
+                };
+                text = Some(s);
+            } else if k.starts_with('#') {
+                bail!("unrecognized special key '{k}' (only #text supported)");
+            } else {
+                children.push((k, v));
+            }
+        }
+        w.write_event(&XmlEvent::StartTag {
+            name: name.into(),
+            attrs,
+        })?;
+        if let Some(t) = text {
+            w.write_event(&XmlEvent::Text(t))?;
+        }
+        for (cn, cv) in children {
+            write_element(w, cn, cv)?;
+        }
+        w.write_event(&XmlEvent::EndTag { name: name.into() })?;
+        return Ok(());
+    }
+    // Non-object: open <name>, render value as inner content, close </name>.
+    w.write_event(&XmlEvent::StartTag {
+        name: name.into(),
+        attrs: vec![],
+    })?;
+    match value {
+        Value::Null => {}
+        Value::Bool(b) => w.write_event(&XmlEvent::Text(b.to_string()))?,
+        Value::Number(n) => w.write_event(&XmlEvent::Text(n.to_string()))?,
+        Value::String(s) => w.write_event(&XmlEvent::Text(s.clone()))?,
+        Value::Array(items) => {
+            for v in items {
+                write_element(w, name, v)?;
+            }
+        }
+        Value::Object(_) => unreachable!(),
+    }
+    w.write_event(&XmlEvent::EndTag { name: name.into() })?;
     Ok(())
 }
 
@@ -210,6 +299,85 @@ mod tests {
             run(r#"{"a": {"n": 42, "b": true}}"#),
             "<a><b>true</b><n>42</n></a>"
         );
+    }
+
+    fn args_with(args_changes: impl FnOnce(&mut ConvertArgs)) -> ConvertArgs {
+        let mut a = ConvertArgs {
+            input: None,
+            output: None,
+            from: None,
+            to: None,
+            array_rule: None,
+            root: None,
+            pretty: false,
+            indent: None,
+            tabs: false,
+            xml_decl: false,
+            strict: false,
+        };
+        args_changes(&mut a);
+        a
+    }
+
+    fn render(json: &str, args: ConvertArgs) -> String {
+        let mut out = Vec::new();
+        translate(json.as_bytes(), &mut out, &args).unwrap();
+        String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn root_wraps_multi_key_object() {
+        let args = args_with(|a| a.root = Some("doc".into()));
+        assert_eq!(
+            render(r#"{"a":1,"b":2}"#, args),
+            "<doc><a>1</a><b>2</b></doc>"
+        );
+    }
+
+    #[test]
+    fn root_wraps_array() {
+        let args = args_with(|a| a.root = Some("list".into()));
+        assert_eq!(
+            render(r#"[1,2,3]"#, args),
+            "<list><list>1</list><list>2</list><list>3</list></list>"
+        );
+    }
+
+    #[test]
+    fn root_wraps_scalar() {
+        let args = args_with(|a| a.root = Some("v".into()));
+        assert_eq!(render(r#""hi""#, args), "<v>hi</v>");
+    }
+
+    #[test]
+    fn xml_decl_prefixes_output() {
+        let args = args_with(|a| a.xml_decl = true);
+        assert_eq!(
+            render(r#"{"a":"v"}"#, args),
+            r#"<?xml version="1.0" encoding="UTF-8"?><a>v</a>"#
+        );
+    }
+
+    #[test]
+    fn pretty_indent_two() {
+        let args = args_with(|a| {
+            a.pretty = true;
+            a.indent = Some(2);
+        });
+        assert_eq!(render(r#"{"a":{"b":"v"}}"#, args), "<a>\n  <b>v</b>\n</a>");
+    }
+
+    #[test]
+    fn strict_blocks_root_rescue() {
+        let args = args_with(|a| {
+            a.strict = true;
+            a.root = Some("doc".into());
+        });
+        let mut out = Vec::new();
+        // --root + --strict + multi-key top-level → error; --strict
+        // forbids the rescue.
+        let err = translate(r#"{"a":1,"b":2}"#.as_bytes(), &mut out, &args).unwrap_err();
+        assert!(format!("{err:#}").contains("strict"));
     }
 
     #[test]
