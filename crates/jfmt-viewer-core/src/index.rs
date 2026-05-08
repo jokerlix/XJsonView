@@ -21,9 +21,17 @@ pub struct SparseIndex {
 
 impl SparseIndex {
     pub fn build(input: &[u8], mode: IndexMode) -> Result<Self> {
+        Self::build_with_progress(input, mode, |_, _| {})
+    }
+
+    pub fn build_with_progress<F: FnMut(u64, u64)>(
+        input: &[u8],
+        mode: IndexMode,
+        on_progress: F,
+    ) -> Result<Self> {
         match mode {
-            IndexMode::Json => build_json(input),
-            IndexMode::Ndjson => crate::ndjson::build_ndjson(input),
+            IndexMode::Json => build_json(input, on_progress),
+            IndexMode::Ndjson => crate::ndjson::build_ndjson(input, on_progress),
         }
     }
 }
@@ -35,7 +43,7 @@ struct Frame {
     kind: ContainerKind,
 }
 
-fn build_json(input: &[u8]) -> Result<SparseIndex> {
+fn build_json<F: FnMut(u64, u64)>(input: &[u8], mut on_progress: F) -> Result<SparseIndex> {
     let mut reader = EventReader::new_unlimited(input);
     let mut entries: Vec<ContainerEntry> = Vec::new();
     let mut stack: Vec<Frame> = Vec::new();
@@ -147,7 +155,12 @@ fn build_json(input: &[u8]) -> Result<SparseIndex> {
                 // top-level scalar: root_kind stays None
             }
         }
+        if entries.len() % 1024 == 0 {
+            on_progress(reader.byte_offset(), input.len() as u64);
+        }
     }
+
+    on_progress(input.len() as u64, input.len() as u64);
 
     Ok(SparseIndex {
         entries,
@@ -205,5 +218,19 @@ mod tests {
         let idx = SparseIndex::build(b"42", IndexMode::Json).unwrap();
         assert!(idx.entries.is_empty());
         assert!(idx.root_kind.is_none());
+    }
+
+    #[test]
+    fn build_with_progress_invokes_callback() {
+        let bytes = fixture("small.json");
+        let mut calls: Vec<(u64, u64)> = Vec::new();
+        let _ = SparseIndex::build_with_progress(&bytes, IndexMode::Json, |done, total| {
+            calls.push((done, total));
+        })
+        .unwrap();
+        assert!(!calls.is_empty(), "expected at least one progress call");
+        let last = calls.last().unwrap();
+        assert_eq!(last.1, bytes.len() as u64, "total should be input length");
+        assert!(last.0 <= last.1);
     }
 }
