@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { closeFile, NodeId, openFile } from "./api";
-import { copyPointer } from "./lib/clipboard";
 import { Tree } from "./components/Tree";
 import { Preview } from "./components/Preview";
+import { SearchBar } from "./components/SearchBar";
+import { useSearch } from "./lib/searchState";
+import { copyPointer } from "./lib/clipboard";
 
 interface OpenSession {
   sessionId: string;
@@ -18,6 +20,14 @@ export function App() {
   const [progress, setProgress] = useState<string>("");
   const [selected, setSelected] = useState<NodeId | null>(null);
   const [pointerHint, setPointerHint] = useState<string>("");
+
+  const sessionId = session?.sessionId ?? null;
+  const { state: searchState, start: startSearch, cancel: cancelSearchOp } = useSearch(sessionId);
+  const [searchCursor, setSearchCursor] = useState(0);
+
+  useEffect(() => {
+    setSearchCursor(0);
+  }, [searchState.query.needle, searchState.query.scope, searchState.query.case_sensitive]);
 
   async function copyCurrentPointer() {
     if (!session || selected === null) return;
@@ -99,6 +109,17 @@ export function App() {
         {pointerHint && (
           <span style={{ marginLeft: 8, color: "#080", fontSize: 12 }}>
             {pointerHint}
+          </span>
+        )}
+        {session && (
+          <span style={{ marginLeft: 16 }}>
+            <SearchBar
+              state={searchState}
+              cursor={searchCursor}
+              onCursorChange={setSearchCursor}
+              onQuery={startSearch}
+              onCancel={cancelSearchOp}
+            />
           </span>
         )}
       </header>
