@@ -33,3 +33,4 @@ predicates = { workspace = true }
 tempfile = { workspace = true }
 flate2 = { workspace = true }
 zstd = { workspace = true }
+proptest = { workspace = true }
