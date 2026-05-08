@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-cli", "crates/jfmt-xml"]
+members = ["crates/jfmt-cli", "crates/jfmt-core", "crates/jfmt-io", "crates/jfmt-viewer-core", "crates/jfmt-xml"]
 
 [workspace.package]
 version = "0.2.0"
@@ -48,6 +48,10 @@ jsonschema = "=0.18.3"
 criterion = "=0.5.1"
 # XML support (M7). Pinned to keep MSRV 1.75.
 quick-xml = "=0.39.2"
+# GUI viewer core (M8). memchr for fast byte scanning; smallvec for
+# inline node children without heap allocation for small trees.
+memchr = "2"
+smallvec = { version = "1", features = ["serde"] }
 
 [profile.release]
 lto = "thin"

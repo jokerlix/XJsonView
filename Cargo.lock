@@ -1046,6 +1046,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "jfmt-viewer-core"
+version = "0.0.1"
+dependencies = [
+ "jfmt-core",
+ "memchr",
+ "proptest",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "jfmt-xml"
 version = "0.2.0"
 dependencies = [
@@ -1757,6 +1771,9 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "socket2"
