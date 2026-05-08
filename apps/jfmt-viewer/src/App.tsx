@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { closeFile, openFile } from "./api";
+import { closeFile, NodeId, openFile } from "./api";
 import { Tree } from "./components/Tree";
+import { Preview } from "./components/Preview";
 
 interface OpenSession {
   sessionId: string;
@@ -14,6 +15,7 @@ interface OpenSession {
 export function App() {
   const [session, setSession] = useState<OpenSession | null>(null);
   const [progress, setProgress] = useState<string>("");
+  const [selected, setSelected] = useState<NodeId | null>(null);
 
   async function pickFile() {
     const picked = await open({
@@ -23,9 +25,11 @@ export function App() {
     if (!picked || Array.isArray(picked)) return;
     if (session) await closeFile(session.sessionId);
     setProgress("opening…");
+    setSelected(null);
     const resp = await openFile(picked, (p) => {
       if (p.phase === "scanning") {
-        setProgress(`scanning: ${p.bytes_done}/${p.bytes_total}`);
+        const pct = ((p.bytes_done / Math.max(1, p.bytes_total)) * 100).toFixed(0);
+        setProgress(`scanning: ${pct}%`);
       } else if (p.phase === "ready") {
         setProgress(`ready (${p.build_ms} ms)`);
       } else if (p.phase === "error") {
@@ -42,17 +46,37 @@ export function App() {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui", padding: 16 }}>
-      <h2 style={{ margin: "0 0 8px" }}>jfmt-viewer (M8.1)</h2>
-      <button onClick={pickFile}>📁 Open</button>{" "}
-      <span style={{ color: "#666" }}>{progress}</span>
-      {session && (
-        <>
-          <h3 style={{ marginTop: 16 }}>
+    <main
+      style={{
+        fontFamily: "system-ui",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <header style={{ padding: 8, borderBottom: "1px solid #ddd" }}>
+        <button onClick={pickFile}>📁 Open</button>{" "}
+        <span style={{ color: "#666" }}>{progress}</span>
+        {session && (
+          <span style={{ marginLeft: 16, color: "#444", fontSize: 12 }}>
             {session.path} · {session.format} · {session.totalBytes} bytes
-          </h3>
-          <Tree sessionId={session.sessionId} rootId={session.rootId} />
-        </>
+          </span>
+        )}
+      </header>
+      {session && (
+        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+          <div style={{ flex: "0 0 40%", borderRight: "1px solid #ddd" }}>
+            <Tree
+              sessionId={session.sessionId}
+              rootId={session.rootId}
+              onSelect={setSelected}
+              selectedId={selected}
+            />
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <Preview sessionId={session.sessionId} node={selected} />
+          </div>
+        </div>
       )}
     </main>
   );
