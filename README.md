@@ -236,8 +236,13 @@ Features:
 
 - Virtual scrolling for trees with millions of nodes
 - Right-pane preview of the selected subtree (pretty-printed)
-- Toolbar substring search across keys and string-leaf values
-  (case-insensitive default; ASCII fast path)
+- Toolbar substring **and regex** search across keys and string-leaf values
+  (case-insensitive default; ASCII fast path for substrings; Unicode-aware
+  regex via the `regex` crate)
+- "Search from this node" right-click menu scopes a query to a subtree;
+  matches still report absolute JSON Pointer paths
+- Right-click "Export subtree…" writes any selected subtree to disk;
+  the preview pane's truncation marker doubles as a one-click export
 - One-click copy of the selected node's JSON Pointer (RFC 6901)
 
 Install the standalone GUI from the GitHub Release alongside the CLI.

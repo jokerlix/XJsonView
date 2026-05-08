@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-09
+
+### Added
+
+- Regex search in the GUI viewer (`.*` toggle next to `Aa`).
+  Invalid patterns surface a red border on the input with the
+  full error in a tooltip.
+- Subtree-scoped search (`from_node`). Right-click any tree row →
+  "Search from this node"; matches outside the subtree are
+  excluded but `SearchHit.path` stays absolute.
+- `export_subtree` IPC command + UI. Right-click → "Export
+  subtree…" or click "Export full subtree →" on the preview
+  pane's truncation marker.
+- New `regex` workspace dep.
+
+### Changed
+
+- `SearchQuery` gains `mode: "substring" | "regex"` and an
+  optional `from_node`. Existing callers that pass JSON without
+  `mode` continue to work because both fields default to their
+  prior behaviour (`substring` and the whole file).
+- `ViewerError` gains `InvalidQuery(String)`.
+
 ## [0.3.0] - 2026-05-09
 
 First Phase 2 release. Adds a desktop GUI viewer.

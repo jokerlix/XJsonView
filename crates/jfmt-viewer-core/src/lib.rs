@@ -19,4 +19,6 @@ pub use types::{ChildSummary, ContainerEntry, ContainerKind, KeyRef, Kind, NodeI
 
 pub mod search;
 
-pub use search::{run_search, MatchedIn, SearchHit, SearchMode, SearchQuery, SearchScope, SearchSummary};
+pub use search::{
+    run_search, MatchedIn, SearchHit, SearchMode, SearchQuery, SearchScope, SearchSummary,
+};
