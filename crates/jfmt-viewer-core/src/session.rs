@@ -35,6 +35,11 @@ pub struct GetValueResp {
     pub truncated: bool,
 }
 
+#[derive(Debug, Clone, Copy, serde::Deserialize)]
+pub struct ExportOptions {
+    pub pretty: bool,
+}
+
 #[derive(Debug)]
 pub struct Session {
     path: PathBuf,
@@ -311,6 +316,51 @@ impl Session {
         Ok(crate::pointer::encode_pointer(&refs))
     }
 
+    pub fn export_subtree(
+        &self,
+        node: NodeId,
+        target: &std::path::Path,
+        options: ExportOptions,
+    ) -> Result<u64> {
+        let entry = self
+            .index
+            .entries
+            .get(node.0 as usize)
+            .ok_or(ViewerError::InvalidNode)?;
+
+        // Forward-scan past the recorded file_offset to find the actual
+        // opening `{` or `[`. (Same workaround as get_children / get_value:
+        // EventReader's byte_offset returns the position after the token
+        // it just consumed, so file_offset can land on a colon/whitespace.)
+        let raw_start = entry.file_offset as usize;
+        let raw_end = entry.byte_end as usize;
+        let bytes = &self.bytes[raw_start..raw_end];
+        let skip = bytes
+            .iter()
+            .position(|&b| b == b'{' || b == b'[')
+            .unwrap_or(0);
+        let slice = &bytes[skip..];
+
+        let value: serde_json::Value =
+            serde_json::from_slice(slice).map_err(|e| ViewerError::Parse {
+                pos: entry.file_offset,
+                msg: e.to_string(),
+            })?;
+        let serialized = if options.pretty {
+            serde_json::to_vec_pretty(&value)
+        } else {
+            serde_json::to_vec(&value)
+        }
+        .map_err(|e| ViewerError::Parse {
+            pos: entry.file_offset,
+            msg: e.to_string(),
+        })?;
+
+        std::fs::write(target, &serialized)
+            .map_err(|e| ViewerError::Io(e.to_string()))?;
+        Ok(serialized.len() as u64)
+    }
+
     fn ndjson_root_children(&self, offset: u32, limit: u32) -> Result<GetChildrenResp> {
         let mut items = Vec::new();
         for (i, e) in self.index.entries.iter().enumerate().skip(1) {
@@ -494,6 +544,43 @@ mod tests {
     fn pointer_invalid_node() {
         let s = small_session();
         let err = s.get_pointer(NodeId(9999)).unwrap_err();
+        assert!(matches!(err, crate::ViewerError::InvalidNode));
+    }
+
+    #[test]
+    fn export_subtree_root_pretty_matches_get_value() {
+        let s = small_session();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let bytes = s
+            .export_subtree(NodeId::ROOT, tmp.path(), ExportOptions { pretty: true })
+            .unwrap();
+        assert!(bytes > 0);
+        let written = std::fs::read_to_string(tmp.path()).unwrap();
+        let via_get_value = s.get_value(NodeId::ROOT, None).unwrap().json;
+        assert_eq!(written, via_get_value);
+    }
+
+    #[test]
+    fn export_subtree_compact_is_smaller_than_pretty() {
+        let s = small_session();
+        let pretty_tmp = tempfile::NamedTempFile::new().unwrap();
+        let compact_tmp = tempfile::NamedTempFile::new().unwrap();
+        let pretty_bytes = s
+            .export_subtree(NodeId::ROOT, pretty_tmp.path(), ExportOptions { pretty: true })
+            .unwrap();
+        let compact_bytes = s
+            .export_subtree(NodeId::ROOT, compact_tmp.path(), ExportOptions { pretty: false })
+            .unwrap();
+        assert!(compact_bytes < pretty_bytes);
+    }
+
+    #[test]
+    fn export_subtree_invalid_node() {
+        let s = small_session();
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let err = s
+            .export_subtree(NodeId(9999), tmp.path(), ExportOptions { pretty: true })
+            .unwrap_err();
         assert!(matches!(err, crate::ViewerError::InvalidNode));
     }
 }

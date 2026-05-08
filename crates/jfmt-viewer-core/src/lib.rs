@@ -14,7 +14,7 @@ pub mod session;
 pub use error::{Result, ViewerError};
 pub use index::{IndexMode, SparseIndex};
 pub use ndjson::is_ndjson_path;
-pub use session::{Format, GetChildrenResp, GetValueResp, Session};
+pub use session::{ExportOptions, Format, GetChildrenResp, GetValueResp, Session};
 pub use types::{ChildSummary, ContainerEntry, ContainerKind, KeyRef, Kind, NodeId};
 
 pub mod search;
