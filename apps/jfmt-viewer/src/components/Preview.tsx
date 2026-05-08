@@ -4,9 +4,10 @@ import { getValue, NodeId } from "../api";
 interface Props {
   sessionId: string;
   node: NodeId | null;
+  onExport?: (node: NodeId) => void;
 }
 
-export function Preview({ sessionId, node }: Props) {
+export function Preview({ sessionId, node, onExport }: Props) {
   const [json, setJson] = useState<string>("");
   const [truncated, setTruncated] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -57,23 +58,35 @@ export function Preview({ sessionId, node }: Props) {
     );
   }
   return (
-    <pre
-      style={{
-        margin: 0,
-        padding: 16,
-        fontFamily: "ui-monospace, monospace",
-        fontSize: 12,
-        whiteSpace: "pre",
-        overflow: "auto",
-        height: "100%",
-      }}
-    >
-      {json}
-      {truncated && (
-        <span style={{ color: "#a60", fontStyle: "italic" }}>
-          {"\n(see truncation marker above; full export ships in M9)"}
-        </span>
+    <div style={{ height: "100%", overflow: "auto" }}>
+      <pre
+        style={{
+          margin: 0,
+          padding: 16,
+          fontFamily: "ui-monospace, monospace",
+          fontSize: 12,
+          whiteSpace: "pre",
+        }}
+      >
+        {json}
+      </pre>
+      {truncated && node !== null && (
+        <button
+          onClick={() => onExport?.(node)}
+          style={{
+            display: "block",
+            margin: "8px 16px",
+            padding: "4px 12px",
+            background: "#fee",
+            border: "1px solid #c66",
+            cursor: "pointer",
+            fontFamily: "system-ui",
+            fontSize: 13,
+          }}
+        >
+          Export full subtree →
+        </button>
       )}
-    </pre>
+    </div>
   );
 }

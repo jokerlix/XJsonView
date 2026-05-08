@@ -8,6 +8,7 @@ import { HitList } from "./components/HitList";
 import { useSearch } from "./lib/searchState";
 import { copyPointer } from "./lib/clipboard";
 import { ContextMenu, ContextMenuItem } from "./components/ContextMenu";
+import { runExportFlow } from "./lib/exportFlow";
 
 interface OpenSession {
   sessionId: string;
@@ -74,10 +75,19 @@ export function App() {
     ];
   }
 
-  // Stub for Task 8 — replaced when the export flow lands.
-  async function exportSubtreeFlow(_node: NodeId) {
-    setPointerHint("export coming in Task 8");
-    setTimeout(() => setPointerHint(""), 2000);
+  async function exportSubtreeFlow(node: NodeId) {
+    if (!session) return;
+    const ptr = await getPointer(session.sessionId, node);
+    const safe = (ptr || "root").replace(/[/~]/g, "_").replace(/^_/, "");
+    const result = await runExportFlow(
+      session.sessionId,
+      node,
+      `${safe || "root"}.json`,
+    );
+    if (result) {
+      setPointerHint(result);
+      setTimeout(() => setPointerHint(""), 4000);
+    }
   }
 
   function startSearchScoped(q: SearchQuery) {
@@ -226,7 +236,11 @@ export function App() {
             />
           </div>
           <div style={{ flex: 1, overflow: "hidden" }}>
-            <Preview sessionId={session.sessionId} node={selected} />
+            <Preview
+              sessionId={session.sessionId}
+              node={selected}
+              onExport={exportSubtreeFlow}
+            />
           </div>
         </div>
       )}
