@@ -3,6 +3,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
@@ -10,6 +11,87 @@ use crate::session::Session;
 use crate::types::NodeId;
 use jfmt_core::event::{Event, Scalar};
 use jfmt_core::parser::EventReader;
+
+/// One of two pre-compiled matchers, chosen at the start of run_search.
+enum Matcher {
+    Substring(Vec<u8>, bool),
+    Regex(Regex),
+}
+
+impl Matcher {
+    fn build(query: &SearchQuery) -> Result<Self> {
+        if query.needle.is_empty() {
+            return Ok(Matcher::Substring(Vec::new(), query.case_sensitive));
+        }
+        match query.mode {
+            SearchMode::Substring => {
+                let bytes = if query.case_sensitive {
+                    query.needle.as_bytes().to_vec()
+                } else {
+                    query.needle.to_ascii_lowercase().into_bytes()
+                };
+                Ok(Matcher::Substring(bytes, query.case_sensitive))
+            }
+            SearchMode::Regex => {
+                let mut b = RegexBuilder::new(&query.needle);
+                b.case_insensitive(!query.case_sensitive);
+                let re = b
+                    .build()
+                    .map_err(|e| crate::ViewerError::InvalidQuery(e.to_string()))?;
+                Ok(Matcher::Regex(re))
+            }
+        }
+    }
+
+    fn is_match(&self, haystack: &str) -> bool {
+        match self {
+            Matcher::Substring(needle, case_sensitive) => {
+                if needle.is_empty() {
+                    return false;
+                }
+                if *case_sensitive {
+                    memchr::memmem::find(haystack.as_bytes(), needle).is_some()
+                } else if haystack.is_ascii() {
+                    memchr::memmem::find(&haystack.as_bytes().to_ascii_lowercase(), needle)
+                        .is_some()
+                } else {
+                    haystack
+                        .to_lowercase()
+                        .contains(std::str::from_utf8(needle).unwrap_or(""))
+                }
+            }
+            Matcher::Regex(re) => re.is_match(haystack),
+        }
+    }
+
+    fn first_match_range(&self, haystack: &str) -> Option<(usize, usize)> {
+        match self {
+            Matcher::Substring(needle, case_sensitive) => {
+                if needle.is_empty() {
+                    return None;
+                }
+                if *case_sensitive {
+                    let idx = memchr::memmem::find(haystack.as_bytes(), needle)?;
+                    Some((idx, idx + needle.len()))
+                } else if haystack.is_ascii() {
+                    let idx = memchr::memmem::find(
+                        &haystack.as_bytes().to_ascii_lowercase(),
+                        needle,
+                    )?;
+                    Some((idx, idx + needle.len()))
+                } else {
+                    let lower = haystack.to_lowercase();
+                    let idx = lower.find(std::str::from_utf8(needle).ok()?)?;
+                    Some((idx, idx + needle.len()))
+                }
+            }
+            Matcher::Regex(re) => {
+                let m = re.find(haystack)?;
+                Some((m.start(), m.end()))
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SearchQuery {
@@ -73,19 +155,10 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
         });
     }
 
-    let needle_lc;
-    let needle_bytes: &[u8] = if query.case_sensitive {
-        query.needle.as_bytes()
-    } else {
-        needle_lc = query.needle.to_ascii_lowercase();
-        needle_lc.as_bytes()
-    };
-    if needle_bytes.is_empty() {
-        return Ok(SearchSummary {
-            total_hits: 0,
-            cancelled: false,
-        });
+    if query.needle.trim().is_empty() {
+        return Ok(SearchSummary { total_hits: 0, cancelled: false });
     }
+    let matcher = Matcher::build(query)?;
 
     let bytes = std::fs::read(session.path())?;
     let mut reader = EventReader::new_unlimited(&bytes[..]);
@@ -139,14 +212,14 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
                 next_index_per_depth.pop();
             }
             Event::Name(k) => {
-                if do_keys && contains_match(&k, needle_bytes, query.case_sensitive) {
+                if do_keys && matcher.is_match(&k) {
                     total += 1;
                     let path = build_path(&path_segments, &k);
                     let hit = SearchHit {
                         node: None,
                         path,
                         matched_in: MatchedIn::Key,
-                        snippet: snippet(&k, needle_bytes, query.case_sensitive),
+                        snippet: snippet(&k, &matcher),
                     };
                     on_hit(&hit);
                 }
@@ -156,14 +229,14 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
                 let seg = consume_step(&mut pending_key, next_index_per_depth.last_mut());
                 if do_values {
                     if let Scalar::String(val) = &scalar {
-                        if contains_match(val, needle_bytes, query.case_sensitive) {
+                        if matcher.is_match(val) {
                             total += 1;
                             let path = build_path(&path_segments, &seg);
                             let hit = SearchHit {
                                 node: None,
                                 path,
                                 matched_in: MatchedIn::Value,
-                                snippet: snippet(val, needle_bytes, query.case_sensitive),
+                                snippet: snippet(val, &matcher),
                             };
                             on_hit(&hit);
                         }
@@ -196,30 +269,11 @@ fn consume_step(pending_key: &mut Option<String>, next_index: Option<&mut u32>) 
     String::new()
 }
 
-fn contains_match(haystack: &str, needle: &[u8], case_sensitive: bool) -> bool {
-    if case_sensitive {
-        memchr::memmem::find(haystack.as_bytes(), needle).is_some()
-    } else if haystack.is_ascii() {
-        memchr::memmem::find(&haystack.as_bytes().to_ascii_lowercase(), needle).is_some()
-    } else {
-        haystack
-            .to_lowercase()
-            .contains(std::str::from_utf8(needle).unwrap_or(""))
-    }
-}
-
-fn snippet(haystack: &str, needle: &[u8], case_sensitive: bool) -> String {
+fn snippet(haystack: &str, matcher: &Matcher) -> String {
     let bytes = haystack.as_bytes();
-    let lower;
-    let probe = if case_sensitive {
-        bytes
-    } else {
-        lower = bytes.to_ascii_lowercase();
-        &lower[..]
-    };
-    let idx = memchr::memmem::find(probe, needle).unwrap_or(0);
-    let raw_start = idx.saturating_sub(SNIPPET_RADIUS);
-    let raw_end = (idx + needle.len() + SNIPPET_RADIUS).min(bytes.len());
+    let (m_start, m_end) = matcher.first_match_range(haystack).unwrap_or((0, 0));
+    let raw_start = m_start.saturating_sub(SNIPPET_RADIUS);
+    let raw_end = (m_end + SNIPPET_RADIUS).min(bytes.len());
 
     let mut start = raw_start;
     while start > 0 && !haystack.is_char_boundary(start) {
@@ -231,9 +285,9 @@ fn snippet(haystack: &str, needle: &[u8], case_sensitive: bool) -> String {
     }
     let prefix = if start > 0 { "…" } else { "" };
     let suffix = if end < bytes.len() { "…" } else { "" };
-    let before_match = &haystack[start..idx];
-    let matched = &haystack[idx..idx + needle.len()];
-    let after_match = &haystack[idx + needle.len()..end];
+    let before_match = &haystack[start..m_start];
+    let matched = &haystack[m_start..m_end];
+    let after_match = &haystack[m_end..end];
     format!("{prefix}{before_match}**{matched}**{after_match}{suffix}")
 }
 
@@ -343,5 +397,68 @@ mod tests {
         )
         .unwrap();
         assert!(summary.cancelled);
+    }
+
+    #[test]
+    fn regex_finds_anchor_pattern() {
+        let s = small_session();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut hits = Vec::new();
+        run_search(
+            &s,
+            &SearchQuery {
+                needle: "^Al".into(),
+                mode: SearchMode::Regex,
+                case_sensitive: true,
+                scope: SearchScope::Values,
+            },
+            &cancel,
+            |hit| hits.push(hit.clone()),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].matched_in, MatchedIn::Value);
+    }
+
+    #[test]
+    fn regex_invalid_pattern_errors() {
+        let s = small_session();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let err = run_search(
+            &s,
+            &SearchQuery {
+                needle: "(".into(),
+                mode: SearchMode::Regex,
+                case_sensitive: true,
+                scope: SearchScope::Both,
+            },
+            &cancel,
+            |_| {},
+            |_, _, _| {},
+        )
+        .unwrap_err();
+        assert!(matches!(err, crate::ViewerError::InvalidQuery(_)));
+    }
+
+    #[test]
+    fn regex_case_insensitive() {
+        let s = small_session();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut hits = Vec::new();
+        run_search(
+            &s,
+            &SearchQuery {
+                needle: "alice".into(),
+                mode: SearchMode::Regex,
+                case_sensitive: false,
+                scope: SearchScope::Values,
+            },
+            &cancel,
+            |hit| hits.push(hit.clone()),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(hits.len(), 1);
     }
 }
