@@ -26,6 +26,9 @@ pub enum ViewerError {
 
     #[error("io: {0}")]
     Io(String),
+
+    #[error("file is in use by another session: {0}")]
+    FileLocked(String),
 }
 
 impl From<std::io::Error> for ViewerError {
@@ -77,6 +80,14 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "x");
         let v: ViewerError = io_err.into();
         assert!(matches!(v, ViewerError::Io(_)));
+    }
+
+    #[test]
+    fn file_locked_displays() {
+        let err = ViewerError::FileLocked("foo.json".into());
+        assert_eq!(err.to_string(), "file is in use by another session: foo.json");
+        let s = serde_json::to_string(&err).unwrap();
+        assert!(s.contains("FileLocked"), "got {s}");
     }
 
     #[test]

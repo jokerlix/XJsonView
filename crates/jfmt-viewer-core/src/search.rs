@@ -74,10 +74,8 @@ impl Matcher {
                     let idx = memchr::memmem::find(haystack.as_bytes(), needle)?;
                     Some((idx, idx + needle.len()))
                 } else if haystack.is_ascii() {
-                    let idx = memchr::memmem::find(
-                        &haystack.as_bytes().to_ascii_lowercase(),
-                        needle,
-                    )?;
+                    let idx =
+                        memchr::memmem::find(&haystack.as_bytes().to_ascii_lowercase(), needle)?;
                     Some((idx, idx + needle.len()))
                 } else {
                     let lower = haystack.to_lowercase();
@@ -158,7 +156,10 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
     }
 
     if query.needle.trim().is_empty() {
-        return Ok(SearchSummary { total_hits: 0, cancelled: false });
+        return Ok(SearchSummary {
+            total_hits: 0,
+            cancelled: false,
+        });
     }
     let matcher = Matcher::build(query)?;
 
@@ -350,8 +351,17 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
 
+    /// Per-test tempfile copy of small.json — exclusive file lock added in M10
+    /// would otherwise serialize parallel tests sharing the fixture path.
     fn small_session() -> Session {
-        let path = format!("{}/tests/fixtures/small.json", env!("CARGO_MANIFEST_DIR"));
+        let src = format!("{}/tests/fixtures/small.json", env!("CARGO_MANIFEST_DIR"));
+        let bytes = std::fs::read(&src).expect(&src);
+        let tmp = tempfile::Builder::new()
+            .suffix(".json")
+            .tempfile()
+            .unwrap();
+        std::fs::write(tmp.path(), &bytes).unwrap();
+        let (_file, path) = tmp.keep().unwrap();
         Session::open(path).unwrap()
     }
 

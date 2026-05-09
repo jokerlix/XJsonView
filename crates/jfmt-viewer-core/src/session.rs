@@ -43,7 +43,11 @@ pub struct ExportOptions {
 #[derive(Debug)]
 pub struct Session {
     path: PathBuf,
-    bytes: Vec<u8>,
+    /// Order matters: `bytes` (the Mmap) drops before `_file`, so the
+    /// underlying handle is still alive when the mapping is torn down.
+    /// Dropping `_file` releases the OS lock acquired via fs4.
+    bytes: memmap2::Mmap,
+    _file: std::fs::File,
     index: SparseIndex,
     format: Format,
 }
@@ -58,10 +62,28 @@ impl Session {
         on_progress: F,
     ) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        let bytes = std::fs::read(&path).map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => ViewerError::NotFound(path.display().to_string()),
-            _ => ViewerError::Io(e.to_string()),
-        })?;
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .open(&path)
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => ViewerError::NotFound(path.display().to_string()),
+                _ => ViewerError::Io(e.to_string()),
+            })?;
+        // Shared lock: any number of Session readers may coexist, but
+        // external writers (which need exclusive) are blocked. Exclusive
+        // lock + mmap together break on Windows (mapped reads hit the
+        // locked region with ERROR_LOCK_VIOLATION); shared lock avoids
+        // that while still preventing the file from being clobbered.
+        // Fully-qualified to disambiguate from the unstable std method.
+        fs4::fs_std::FileExt::try_lock_shared(&file)
+            .map_err(|_| ViewerError::FileLocked(path.display().to_string()))?;
+        // SAFETY: file is held in `Self::_file` for the Session lifetime,
+        // so the mapping stays valid. External mutation of the file is
+        // prevented by the exclusive lock above.
+        let bytes = unsafe {
+            memmap2::Mmap::map(&file).map_err(|e| ViewerError::Io(e.to_string()))?
+        };
+
         let format = if is_ndjson_path(&path) {
             Format::Ndjson
         } else {
@@ -71,10 +93,11 @@ impl Session {
             Format::Json => IndexMode::Json,
             Format::Ndjson => IndexMode::Ndjson,
         };
-        let index = SparseIndex::build_with_progress(&bytes, mode, on_progress)?;
+        let index = SparseIndex::build_with_progress(&bytes[..], mode, on_progress)?;
         Ok(Self {
             path,
             bytes,
+            _file: file,
             index,
             format,
         })
@@ -428,8 +451,18 @@ mod tests {
     use super::*;
     use crate::types::Kind;
 
+    /// Copy the shared `small.json` fixture into a unique tempfile and open a
+    /// Session on it. The exclusive lock on the source fixture would otherwise
+    /// serialize all parallel tests; per-test tempfiles avoid that.
     fn small_session() -> Session {
-        let path = format!("{}/tests/fixtures/small.json", env!("CARGO_MANIFEST_DIR"));
+        let src = format!("{}/tests/fixtures/small.json", env!("CARGO_MANIFEST_DIR"));
+        let bytes = std::fs::read(&src).expect(&src);
+        let tmp = tempfile::Builder::new()
+            .suffix(".json")
+            .tempfile()
+            .unwrap();
+        std::fs::write(tmp.path(), &bytes).unwrap();
+        let (_file, path) = tmp.keep().unwrap();
         Session::open(path).unwrap()
     }
 
@@ -481,6 +514,15 @@ mod tests {
         assert_eq!(resp.items.len(), 50);
         assert_eq!(resp.items[0].key, "950");
         assert_eq!(resp.items[49].key, "999");
+    }
+
+    #[test]
+    fn multiple_readers_coexist() {
+        // Shared lock allows any number of Session readers on the same file.
+        let f = write_array_fixture(10);
+        let _a = Session::open(f.path()).unwrap();
+        let _b = Session::open(f.path()).unwrap();
+        let _c = Session::open(f.path()).unwrap();
     }
 
     #[test]

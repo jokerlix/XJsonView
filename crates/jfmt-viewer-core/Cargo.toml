@@ -14,6 +14,8 @@ thiserror = { workspace = true }
 memchr.workspace = true
 regex.workspace = true
 smallvec.workspace = true
+memmap2.workspace = true
+fs4.workspace = true
 
 [dev-dependencies]
 proptest = { workspace = true }

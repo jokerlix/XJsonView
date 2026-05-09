@@ -56,6 +56,9 @@ smallvec = { version = "1", features = ["serde"] }
 # Async runtime for Tauri commands that wrap blocking jfmt-viewer-core
 # calls in spawn_blocking.
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros"] }
+# M10 — viewer scalability for large JSON arrays.
+memmap2 = "0.9"
+fs4 = "0.9"
 
 [profile.release]
 lto = "thin"
