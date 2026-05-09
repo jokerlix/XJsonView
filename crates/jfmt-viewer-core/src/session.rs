@@ -122,15 +122,24 @@ impl Session {
             .map(|p| scan_start + p)
             .unwrap_or(scan_start);
 
-        // Re-walk this container's byte range.
+        // Walk the parent's byte range with a depth-tracking EventReader.
+        // Direct children (depth == 1) are paginated against [offset, stop_at);
+        // their CSR slice provides O(1) NodeId lookup for container children.
         let slice = &self.bytes[actual_start..entry.byte_end as usize];
         let mut reader = EventReader::new_unlimited(slice);
-        let mut items: Vec<ChildSummary> = Vec::new();
+        let csr = self.index.children_of(parent);
+        let mut csr_cursor = 0usize;
+        let mut child_idx: u32 = 0;
         let mut depth = 0u32;
-        let mut next_index = 0u32;
         let mut pending_key: Option<String> = None;
+        let mut next_index = 0u32;
+        let mut items: Vec<ChildSummary> = Vec::with_capacity(limit.min(64) as usize);
+        let stop_at = offset.saturating_add(limit);
 
         loop {
+            if items.len() == limit as usize {
+                break;
+            }
             let local_pos = reader.byte_offset();
             let ev = match reader.next_event() {
                 Ok(Some(e)) => e,
@@ -145,24 +154,34 @@ impl Session {
             match ev {
                 Event::StartObject | Event::StartArray => {
                     if depth == 1 {
-                        let key = self.consume_key(entry.kind, &mut pending_key, &mut next_index);
-                        let child_offset = actual_start as u64 + local_pos;
-                        let id = self.find_container_child(parent, child_offset);
-                        let child_kind = if matches!(ev, Event::StartObject) {
-                            Kind::Object
+                        let id = csr[csr_cursor];
+                        csr_cursor += 1;
+                        if child_idx >= offset && child_idx < stop_at {
+                            let key = self.consume_key(
+                                entry.kind,
+                                &mut pending_key,
+                                &mut next_index,
+                            );
+                            let child_kind = if matches!(ev, Event::StartObject) {
+                                Kind::Object
+                            } else {
+                                Kind::Array
+                            };
+                            items.push(ChildSummary {
+                                id: Some(id),
+                                key,
+                                kind: child_kind,
+                                child_count: self.index.entries[id.0 as usize].child_count,
+                                preview: None,
+                            });
                         } else {
-                            Kind::Array
-                        };
-                        let count = id
-                            .map(|id| self.index.entries[id.0 as usize].child_count)
-                            .unwrap_or(0);
-                        items.push(ChildSummary {
-                            id,
-                            key,
-                            kind: child_kind,
-                            child_count: count,
-                            preview: None,
-                        });
+                            let _ = self.consume_key(
+                                entry.kind,
+                                &mut pending_key,
+                                &mut next_index,
+                            );
+                        }
+                        child_idx += 1;
                     }
                     depth += 1;
                 }
@@ -179,27 +198,36 @@ impl Session {
                 }
                 Event::Value(scalar) => {
                     if depth == 1 {
-                        let key = self.consume_key(entry.kind, &mut pending_key, &mut next_index);
-                        let (kind, preview) = leaf_preview(&scalar);
-                        items.push(ChildSummary {
-                            id: None,
-                            key,
-                            kind,
-                            child_count: 0,
-                            preview: Some(preview),
-                        });
+                        if child_idx >= offset && child_idx < stop_at {
+                            let key = self.consume_key(
+                                entry.kind,
+                                &mut pending_key,
+                                &mut next_index,
+                            );
+                            let (kind, preview) = leaf_preview(&scalar);
+                            items.push(ChildSummary {
+                                id: None,
+                                key,
+                                kind,
+                                child_count: 0,
+                                preview: Some(preview),
+                            });
+                        } else {
+                            let _ = self.consume_key(
+                                entry.kind,
+                                &mut pending_key,
+                                &mut next_index,
+                            );
+                        }
+                        child_idx += 1;
                     }
                 }
             }
         }
 
-        let total = items.len() as u32;
-        let start = offset.min(total) as usize;
-        let end = (offset.saturating_add(limit)).min(total) as usize;
-        let window = items[start..end].to_vec();
         Ok(GetChildrenResp {
-            items: window,
-            total,
+            items,
+            total: entry.child_count,
         })
     }
 
@@ -277,17 +305,6 @@ impl Session {
                 s
             }
         }
-    }
-
-    fn find_container_child(&self, parent: NodeId, child_offset: u64) -> Option<NodeId> {
-        let kids = self.index.children_of(parent);
-        kids.binary_search_by(|id| {
-            self.index.entries[id.0 as usize]
-                .file_offset
-                .cmp(&child_offset)
-        })
-        .ok()
-        .map(|i| kids[i])
     }
 
     pub fn get_pointer(&self, node: NodeId) -> Result<String> {
@@ -414,6 +431,65 @@ mod tests {
     fn small_session() -> Session {
         let path = format!("{}/tests/fixtures/small.json", env!("CARGO_MANIFEST_DIR"));
         Session::open(path).unwrap()
+    }
+
+    fn write_array_fixture(n: usize) -> tempfile::NamedTempFile {
+        use std::io::Write;
+        let f = tempfile::Builder::new().suffix(".json").tempfile().unwrap();
+        let mut w = std::io::BufWriter::new(f.reopen().unwrap());
+        write!(w, "[").unwrap();
+        for i in 0..n {
+            if i > 0 {
+                write!(w, ",").unwrap();
+            }
+            write!(w, "{{\"i\":{i}}}").unwrap();
+        }
+        write!(w, "]").unwrap();
+        w.flush().unwrap();
+        drop(w);
+        f
+    }
+
+    #[test]
+    fn get_children_paginates_head() {
+        let f = write_array_fixture(1000);
+        let s = Session::open(f.path()).unwrap();
+        let resp = s.get_children(NodeId::ROOT, 0, 100).unwrap();
+        assert_eq!(resp.total, 1000);
+        assert_eq!(resp.items.len(), 100);
+        assert_eq!(resp.items[0].key, "0");
+        assert_eq!(resp.items[99].key, "99");
+    }
+
+    #[test]
+    fn get_children_paginates_middle() {
+        let f = write_array_fixture(1000);
+        let s = Session::open(f.path()).unwrap();
+        let resp = s.get_children(NodeId::ROOT, 500, 100).unwrap();
+        assert_eq!(resp.total, 1000);
+        assert_eq!(resp.items.len(), 100);
+        assert_eq!(resp.items[0].key, "500");
+        assert_eq!(resp.items[99].key, "599");
+    }
+
+    #[test]
+    fn get_children_paginates_tail() {
+        let f = write_array_fixture(1000);
+        let s = Session::open(f.path()).unwrap();
+        let resp = s.get_children(NodeId::ROOT, 950, 100).unwrap();
+        assert_eq!(resp.total, 1000);
+        assert_eq!(resp.items.len(), 50);
+        assert_eq!(resp.items[0].key, "950");
+        assert_eq!(resp.items[49].key, "999");
+    }
+
+    #[test]
+    fn get_children_offset_past_end_empty() {
+        let f = write_array_fixture(10);
+        let s = Session::open(f.path()).unwrap();
+        let resp = s.get_children(NodeId::ROOT, 100, 100).unwrap();
+        assert_eq!(resp.total, 10);
+        assert_eq!(resp.items.len(), 0);
     }
 
     #[test]

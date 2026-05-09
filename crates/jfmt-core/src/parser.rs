@@ -179,6 +179,20 @@ impl<R: Read> EventReader<R> {
     }
 }
 
+impl<'a> EventReader<&'a [u8]> {
+    /// Construct an unlimited-depth reader that begins at byte offset
+    /// `start` within `input`. Caller must guarantee `start` is on a valid
+    /// token boundary (a `[` / `{` / `]` / `}` / `,` byte, or the first
+    /// byte of a value).
+    ///
+    /// `byte_offset()` reports positions relative to the sub-slice
+    /// (`&input[start..]`). Callers needing absolute file position add
+    /// `start` themselves.
+    pub fn from_slice_at(input: &'a [u8], start: usize) -> Self {
+        Self::new_unlimited(&input[start..])
+    }
+}
+
 fn map_err(e: ReaderError) -> Error {
     match e {
         ReaderError::IoError { error, .. } => Error::Io(error),
@@ -208,6 +222,15 @@ mod tests {
             out.push(e);
         }
         out
+    }
+
+    #[test]
+    fn from_slice_at_starts_at_offset() {
+        let input = br#"[1, 2, {"k": 3}, 4]"#;
+        assert_eq!(input[7], b'{');
+        let mut r = EventReader::from_slice_at(input, 7);
+        let ev = r.next_event().unwrap();
+        assert!(matches!(ev, Some(Event::StartObject)));
     }
 
     #[test]
