@@ -69,8 +69,11 @@ pub(crate) fn build_ndjson<F: FnMut(u64, u64)>(
 
     on_progress(input.len() as u64, input.len() as u64);
 
+    let (child_offsets, child_ids) = crate::index::compute_csr(&entries);
     Ok(SparseIndex {
         entries,
+        child_offsets,
+        child_ids,
         root_kind: Some(ContainerKind::NdjsonDoc),
         byte_len: input.len() as u64,
     })
