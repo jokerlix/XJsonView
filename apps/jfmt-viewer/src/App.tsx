@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { closeFile, getPointer, NodeId, openFile, SearchQuery } from "./api";
+import { ChildSummary, closeFile, getPointer, NodeId, openFile, openText, SearchQuery } from "./api";
 import { Tree, TreeHandle } from "./components/Tree";
 import { Preview } from "./components/Preview";
 import { SearchBar } from "./components/SearchBar";
@@ -18,10 +18,92 @@ interface OpenSession {
   format: string;
 }
 
+function PasteModal({
+  text,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  text: string;
+  onChange: (s: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.35)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2000,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#fff",
+          width: 720,
+          maxWidth: "90vw",
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          borderRadius: 6,
+          padding: 16,
+          gap: 8,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+        }}
+      >
+        <div style={{ fontWeight: 600 }}>Paste JSON / NDJSON</div>
+        <textarea
+          autoFocus
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onSubmit();
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder='{"foo": [1, 2, 3]}'
+          style={{
+            flex: 1,
+            minHeight: 320,
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 12,
+            padding: 8,
+            border: "1px solid #ccc",
+            resize: "vertical",
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontSize: 12,
+            color: "#666",
+          }}
+        >
+          <span>{text.length.toLocaleString()} chars · Ctrl+Enter to open · Esc to cancel</span>
+          <span>
+            <button onClick={onCancel} style={{ marginRight: 8 }}>Cancel</button>
+            <button onClick={onSubmit} disabled={!text.trim()}>Open</button>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [session, setSession] = useState<OpenSession | null>(null);
   const [progress, setProgress] = useState<string>("");
   const [selected, setSelected] = useState<NodeId | null>(null);
+  const [selectedLeaf, setSelectedLeaf] = useState<ChildSummary | null>(null);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
   const [pointerHint, setPointerHint] = useState<string>("");
   const [menu, setMenu] = useState<{ node: NodeId | null; x: number; y: number } | null>(null);
   const [searchScope, setSearchScope] = useState<NodeId | undefined>(undefined);
@@ -41,9 +123,14 @@ export function App() {
     setSearchCursor(idx);
     const hit = searchState.hits[idx];
     if (!hit) return;
-    const id = await treeRef.current?.expandToPointer(hit.path);
-    if (id !== null && id !== undefined) {
-      setSelected(id);
+    const result = await treeRef.current?.expandToPointer(hit.path);
+    if (!result) return;
+    if (result.leaf) {
+      setSelected(null);
+      setSelectedLeaf(result.leaf);
+    } else {
+      setSelected(result.node);
+      setSelectedLeaf(null);
     }
   }
 
@@ -149,6 +236,41 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  async function submitPaste() {
+    const text = pasteText.trim();
+    if (!text) return;
+    if (session) await closeFile(session.sessionId);
+    setProgress("opening pasted text…");
+    setSelected(null);
+    setSelectedLeaf(null);
+    try {
+      const resp = await openText(text, (p) => {
+        if (p.phase === "scanning") {
+          const pct = ((p.bytes_done / Math.max(1, p.bytes_total)) * 100).toFixed(0);
+          setProgress(`scanning: ${pct}%`);
+        } else if (p.phase === "ready") {
+          setProgress(`ready (${p.build_ms} ms)`);
+        } else if (p.phase === "error") {
+          setProgress(`error: ${p.message}`);
+        }
+      });
+      setSession({
+        sessionId: resp.session_id,
+        rootId: resp.root_id,
+        path: "(pasted text)",
+        totalBytes: resp.total_bytes,
+        format: resp.format,
+      });
+      setPasteOpen(false);
+      setPasteText("");
+    } catch (err: unknown) {
+      const msg = (err && typeof err === "object" && "message" in err)
+        ? String((err as { message: unknown }).message)
+        : String(err);
+      setProgress(`error: ${msg}`);
+    }
+  }
+
   async function pickFile() {
     const picked = await open({
       multiple: false,
@@ -188,6 +310,7 @@ export function App() {
     >
       <header style={{ padding: 8, borderBottom: "1px solid #ddd" }}>
         <button onClick={pickFile}>📁 Open</button>{" "}
+        <button onClick={() => setPasteOpen(true)}>📋 Paste JSON</button>{" "}
         <span style={{ color: "#666" }}>{progress}</span>
         {session && (
           <span style={{ marginLeft: 16, color: "#444", fontSize: 12 }}>
@@ -224,13 +347,22 @@ export function App() {
       </header>
       {session && (
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          <HitList state={searchState} cursor={searchCursor} onPick={jumpToHit} />
+          <HitList
+            state={searchState}
+            cursor={searchCursor}
+            onPick={jumpToHit}
+            sessionId={session.sessionId}
+            rootId={session.rootId}
+          />
           <div style={{ flex: "0 0 40%", borderRight: "1px solid #ddd" }}>
             <Tree
               ref={treeRef}
               sessionId={session.sessionId}
               rootId={session.rootId}
-              onSelect={setSelected}
+              onSelect={(node, leaf) => {
+                setSelected(node);
+                setSelectedLeaf(leaf ?? null);
+              }}
               selectedId={selected}
               onContextMenu={(node, x, y) => setMenu({ node, x, y })}
             />
@@ -239,6 +371,7 @@ export function App() {
             <Preview
               sessionId={session.sessionId}
               node={selected}
+              leaf={selectedLeaf}
               onExport={exportSubtreeFlow}
             />
           </div>
@@ -250,6 +383,14 @@ export function App() {
           y={menu.y}
           items={menuItems(menu.node)}
           onDismiss={() => setMenu(null)}
+        />
+      )}
+      {pasteOpen && (
+        <PasteModal
+          text={pasteText}
+          onChange={setPasteText}
+          onCancel={() => setPasteOpen(false)}
+          onSubmit={submitPaste}
         />
       )}
     </main>
