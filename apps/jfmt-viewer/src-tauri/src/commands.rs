@@ -85,6 +85,22 @@ pub async fn open_file(
 }
 
 #[tauri::command]
+pub async fn open_text(
+    content: String,
+    on_progress: Channel<IndexProgress>,
+    state: State<'_, ViewerState>,
+) -> Result<OpenFileResp, ViewerError> {
+    // Persist to a unique tempfile so the existing mmap-backed Session
+    // path works unchanged. Cleaned up by the OS on next reboot; we
+    // don't try to delete on close because the Mmap may still be mapped.
+    let mut tmp = std::env::temp_dir();
+    tmp.push(format!("jfmt-paste-{}.json", uuid::Uuid::new_v4()));
+    std::fs::write(&tmp, content.as_bytes()).map_err(|e| ViewerError::Io(e.to_string()))?;
+    let path = tmp.to_string_lossy().to_string();
+    open_file(path, on_progress, state).await
+}
+
+#[tauri::command]
 pub async fn close_file(
     session_id: String,
     state: State<'_, ViewerState>,
@@ -141,6 +157,29 @@ pub async fn get_value(
     Ok(GetValueResp {
         json: resp.json,
         truncated: resp.truncated,
+    })
+}
+
+#[derive(Serialize)]
+pub struct ChildForSegmentResp {
+    pub node: Option<u64>,
+}
+
+#[tauri::command]
+pub async fn child_for_segment(
+    session_id: String,
+    parent: u64,
+    segment: String,
+    state: State<'_, ViewerState>,
+) -> Result<ChildForSegmentResp, ViewerError> {
+    let session = state
+        .sessions
+        .get(&session_id)
+        .ok_or(ViewerError::InvalidSession)?
+        .clone();
+    let node = session.child_for_segment(NodeId(parent), &segment)?;
+    Ok(ChildForSegmentResp {
+        node: node.map(|n| n.0),
     })
 }
 
@@ -214,6 +253,12 @@ pub async fn search(
     let on_event_clone = on_event.clone();
     let cancel_clone = cancel.clone();
     let started = Instant::now();
+    // Cap streamed Hit events; queries hitting hundreds of thousands of
+    // nodes would otherwise flood the IPC channel and freeze the UI for
+    // seconds. The frontend already caps the visible list at the same
+    // count; remaining hits are reflected via Progress.hits_so_far.
+    const HIT_STREAM_CAP: u32 = 1000;
+    let mut hits_streamed: u32 = 0;
     tokio::task::spawn_blocking(move || {
         let on_event_progress = on_event_clone.clone();
         let result = run_search(
@@ -221,6 +266,10 @@ pub async fn search(
             &query,
             &cancel_clone,
             |hit: &SearchHit| {
+                if hits_streamed >= HIT_STREAM_CAP {
+                    return;
+                }
+                hits_streamed += 1;
                 let _ = on_event_clone.send(SearchEvent::Hit {
                     node: hit.node.map(|n| n.0),
                     path: hit.path.clone(),

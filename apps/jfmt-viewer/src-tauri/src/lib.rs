@@ -8,10 +8,12 @@ pub fn run() {
         .manage(state::ViewerState::new())
         .invoke_handler(tauri::generate_handler![
             commands::open_file,
+            commands::open_text,
             commands::close_file,
             commands::get_children,
             commands::get_value,
             commands::get_pointer,
+            commands::child_for_segment,
             commands::search,
             commands::cancel_search,
             commands::export_subtree,
