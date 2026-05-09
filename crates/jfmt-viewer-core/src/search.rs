@@ -163,7 +163,7 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
     }
     let matcher = Matcher::build(query)?;
 
-    let bytes = std::fs::read(session.path())?;
+    let bytes = session.bytes();
     let (slice, mut path_segments, mut next_index_per_depth, scoped_pending_key) =
         if let Some(node) = query.from_node {
             let entry = session
@@ -184,7 +184,7 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
                 .position(|&b| b == open_byte)
                 .map(|p| scan_start + p)
                 .unwrap_or(scan_start);
-            let scoped = bytes[actual_start..entry.byte_end as usize].to_vec();
+            let scoped = &bytes[actual_start..entry.byte_end as usize];
             // Walk the parent chain to build absolute path segments.
             // All segments form the full path to from_node; the last segment
             // (from_node's own key) is handed off as pending_key so the first
@@ -208,9 +208,9 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
             let depth_count = all_segs.len();
             (scoped, all_segs, vec![0u32; depth_count], own_key)
         } else {
-            (bytes.clone(), Vec::new(), Vec::new(), None)
+            (bytes, Vec::new(), Vec::new(), None)
         };
-    let mut reader = EventReader::new_unlimited(&slice[..]);
+    let mut reader = EventReader::new_unlimited(slice);
     let mut total: u32 = 0;
     let mut pending_key: Option<String> = scoped_pending_key;
 
@@ -228,7 +228,10 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
             });
         }
         let now_pos = reader.byte_offset();
-        if now_pos.saturating_sub(last_progress_at) >= 1_048_576 {
+        // 16 MB granularity keeps the IPC channel quiet on huge files —
+        // a 300 MB scan now emits ~19 progress events instead of ~300,
+        // avoiding setState churn and visible UI flicker.
+        if now_pos.saturating_sub(last_progress_at) >= 16 * 1_048_576 {
             on_progress(now_pos, total_bytes_len, total);
             last_progress_at = now_pos;
         }
@@ -247,13 +250,21 @@ pub fn run_search<F: FnMut(u64, u64, u32)>(
             Event::StartObject | Event::StartArray => {
                 // The segment that points into this new container is determined
                 // by the parent context: pending_key for object children, or
-                // the next array index. Same logic as a leaf "step".
+                // the next array index. Same logic as a leaf "step". The very
+                // first container has no parent, so its segment is empty —
+                // don't push that into the path (would produce "//foo/...").
                 let seg = consume_step(&mut pending_key, next_index_per_depth.last_mut());
-                path_segments.push(seg);
+                if !seg.is_empty() {
+                    path_segments.push(seg);
+                }
                 next_index_per_depth.push(0);
             }
             Event::EndObject | Event::EndArray => {
-                path_segments.pop();
+                // Symmetric pop: only the root depth had no push, so skip
+                // popping path_segments when next_index_per_depth.len() == 1.
+                if next_index_per_depth.len() > 1 {
+                    path_segments.pop();
+                }
                 next_index_per_depth.pop();
             }
             Event::Name(k) => {

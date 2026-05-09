@@ -107,6 +107,11 @@ impl Session {
         &self.path
     }
 
+    /// Memory-mapped file content. Cheap; no I/O.
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes[..]
+    }
+
     pub fn byte_len(&self) -> u64 {
         self.index.byte_len
     }
@@ -326,6 +331,109 @@ impl Session {
                 let s = next_index.to_string();
                 *next_index += 1;
                 s
+            }
+        }
+    }
+}
+
+/// Map an array index to the CSR slot for that element's container.
+/// `Ok(Some(slot))` if element at `idx` is a container, `Ok(None)` if it's
+/// a scalar leaf or the index is out of range.
+fn idx_to_csr_slot(session: &Session, parent: NodeId, idx: usize) -> Result<Option<usize>> {
+    let entry = &session.index.entries[parent.0 as usize];
+    let csr_len = session.index.children_of(parent).len();
+    // Fast path: every direct child is a container (csr == direct child
+    // count). Skip the byte-range walk entirely.
+    if entry.child_count as usize == csr_len {
+        return Ok(if idx < csr_len { Some(idx) } else { None });
+    }
+    // Slow path: scan events to count scalar gaps before idx.
+    let scan_start = entry.file_offset as usize;
+    let actual_start = session.bytes[scan_start..]
+        .iter()
+        .position(|&b| b == b'[')
+        .map(|p| scan_start + p)
+        .unwrap_or(scan_start);
+    let slice = &session.bytes[actual_start..entry.byte_end as usize];
+    let mut reader = EventReader::new_unlimited(slice);
+    let mut depth = 0u32;
+    let mut child_idx = 0usize;
+    let mut csr_cursor = 0usize;
+    loop {
+        let ev = match reader.next_event() {
+            Ok(Some(e)) => e,
+            _ => break,
+        };
+        match ev {
+            Event::StartObject | Event::StartArray => {
+                if depth == 1 {
+                    if child_idx == idx {
+                        return Ok(Some(csr_cursor));
+                    }
+                    csr_cursor += 1;
+                    child_idx += 1;
+                }
+                depth += 1;
+            }
+            Event::EndObject | Event::EndArray => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    break;
+                }
+            }
+            Event::Value(_) => {
+                if depth == 1 {
+                    if child_idx == idx {
+                        return Ok(None); // scalar — no NodeId
+                    }
+                    child_idx += 1;
+                }
+            }
+            Event::Name(_) => {}
+        }
+    }
+    Ok(None)
+}
+
+impl Session {
+    /// Resolve a single JSON-pointer-style segment relative to `parent` to
+    /// the corresponding container child's NodeId. Returns `None` if the
+    /// segment refers to a scalar leaf (which has no NodeId) or the index
+    /// is out of range.
+    ///
+    /// O(1) for arrays (CSR lookup); O(direct_children) for objects (must
+    /// re-walk the parent's byte range to map keys to child positions).
+    pub fn child_for_segment(&self, parent: NodeId, segment: &str) -> Result<Option<NodeId>> {
+        let entry = self
+            .index
+            .entries
+            .get(parent.0 as usize)
+            .ok_or(ViewerError::InvalidNode)?;
+        let csr = self.index.children_of(parent);
+        match entry.kind {
+            ContainerKind::Array => {
+                let idx: usize = match segment.parse() {
+                    Ok(i) => i,
+                    Err(_) => return Ok(None),
+                };
+                // Array element idx might be a scalar (no NodeId) or a
+                // container. CSR only holds containers, but they are
+                // appended in source order, so we can't just index csr
+                // by idx — there may be scalar gaps. Re-walk the array
+                // counting children to find which CSR slot corresponds.
+                let pos = idx_to_csr_slot(self, parent, idx)?;
+                Ok(pos.map(|p| csr[p]))
+            }
+            ContainerKind::Object | ContainerKind::NdjsonDoc => {
+                // Linear scan over container children; objects rarely have
+                // huge direct child counts.
+                for &id in csr {
+                    let e = &self.index.entries[id.0 as usize];
+                    if e.key_or_index.as_str() == segment {
+                        return Ok(Some(id));
+                    }
+                }
+                Ok(None)
             }
         }
     }
