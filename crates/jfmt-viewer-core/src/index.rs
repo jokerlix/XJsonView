@@ -42,6 +42,18 @@ impl SparseIndex {
     }
 }
 
+impl SparseIndex {
+    pub fn children_of(&self, parent: NodeId) -> &[NodeId] {
+        let i = parent.0 as usize;
+        if i + 1 >= self.child_offsets.len() {
+            return &[];
+        }
+        let lo = self.child_offsets[i] as usize;
+        let hi = self.child_offsets[i + 1] as usize;
+        &self.child_ids[lo..hi]
+    }
+}
+
 /// Build CSR `parent → child container ids` arrays from finalized entries.
 ///
 /// Children are emitted in source order (the order they appear in
@@ -317,6 +329,16 @@ mod tests {
             .filter(|e| e.parent == Some(NodeId::ROOT))
             .count();
         assert_eq!(hi - lo, container_kids);
+    }
+
+    #[test]
+    fn children_of_returns_csr_slice() {
+        let bytes = fixture("small.json");
+        let idx = SparseIndex::build(&bytes, IndexMode::Json).unwrap();
+        let root_kids = idx.children_of(NodeId::ROOT);
+        let lo = idx.child_offsets[0] as usize;
+        let hi = idx.child_offsets[1] as usize;
+        assert_eq!(root_kids, &idx.child_ids[lo..hi]);
     }
 
     #[test]

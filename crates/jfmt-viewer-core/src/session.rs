@@ -280,15 +280,14 @@ impl Session {
     }
 
     fn find_container_child(&self, parent: NodeId, child_offset: u64) -> Option<NodeId> {
-        // Children of `parent` are NOT guaranteed to be contiguous in the entries
-        // array — nested containers of earlier children interleave. Scan all entries
-        // that have the given parent and match the file offset.
-        for (i, e) in self.index.entries.iter().enumerate() {
-            if e.parent == Some(parent) && e.file_offset == child_offset {
-                return Some(NodeId(i as u64));
-            }
-        }
-        None
+        let kids = self.index.children_of(parent);
+        kids.binary_search_by(|id| {
+            self.index.entries[id.0 as usize]
+                .file_offset
+                .cmp(&child_offset)
+        })
+        .ok()
+        .map(|i| kids[i])
     }
 
     pub fn get_pointer(&self, node: NodeId) -> Result<String> {
@@ -356,8 +355,7 @@ impl Session {
             msg: e.to_string(),
         })?;
 
-        std::fs::write(target, &serialized)
-            .map_err(|e| ViewerError::Io(e.to_string()))?;
+        std::fs::write(target, &serialized).map_err(|e| ViewerError::Io(e.to_string()))?;
         Ok(serialized.len() as u64)
     }
 
@@ -566,10 +564,18 @@ mod tests {
         let pretty_tmp = tempfile::NamedTempFile::new().unwrap();
         let compact_tmp = tempfile::NamedTempFile::new().unwrap();
         let pretty_bytes = s
-            .export_subtree(NodeId::ROOT, pretty_tmp.path(), ExportOptions { pretty: true })
+            .export_subtree(
+                NodeId::ROOT,
+                pretty_tmp.path(),
+                ExportOptions { pretty: true },
+            )
             .unwrap();
         let compact_bytes = s
-            .export_subtree(NodeId::ROOT, compact_tmp.path(), ExportOptions { pretty: false })
+            .export_subtree(
+                NodeId::ROOT,
+                compact_tmp.path(),
+                ExportOptions { pretty: false },
+            )
             .unwrap();
         assert!(compact_bytes < pretty_bytes);
     }
