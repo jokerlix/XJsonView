@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { ChildSummary, closeFile, getPointer, NodeId, openFile, openText, SearchQuery } from "./api";
+import {
+  ChildSummary,
+  closeFile,
+  getPointer,
+  NodeId,
+  openFile,
+  openText,
+  SearchQuery,
+} from "./api";
 import { Tree, TreeHandle } from "./components/Tree";
 import { Preview } from "./components/Preview";
 import { SearchBar } from "./components/SearchBar";
@@ -8,7 +16,25 @@ import { HitList } from "./components/HitList";
 import { useSearch } from "./lib/searchState";
 import { copyPointer } from "./lib/clipboard";
 import { ContextMenu, ContextMenuItem } from "./components/ContextMenu";
-import { runExportFlow } from "./lib/exportFlow";
+import { runExportFlow, runFormatFlow } from "./lib/exportFlow";
+import { useTheme } from "./lib/theme";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Clipboard,
+  Copy,
+  FileJson,
+  FolderOpen,
+  Moon,
+  Sparkles,
+  Sun,
+} from "lucide-react";
 
 interface OpenSession {
   sessionId: string;
@@ -19,85 +45,65 @@ interface OpenSession {
 }
 
 function PasteModal({
+  open,
   text,
   onChange,
-  onCancel,
+  onClose,
   onSubmit,
 }: {
+  open: boolean;
   text: string;
   onChange: (s: string) => void;
-  onCancel: () => void;
+  onClose: () => void;
   onSubmit: () => void;
 }) {
+  function tryFormat() {
+    try {
+      const parsed = JSON.parse(text);
+      onChange(JSON.stringify(parsed, null, 2));
+    } catch {
+      // ignore — invalid JSON; user can fix and try again
+    }
+  }
   return (
-    <div
-      onClick={onCancel}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.35)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 2000,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: "#fff",
-          width: 720,
-          maxWidth: "90vw",
-          maxHeight: "80vh",
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: 6,
-          padding: 16,
-          gap: 8,
-          boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        }}
-      >
-        <div style={{ fontWeight: 600 }}>Paste JSON / NDJSON</div>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Paste JSON / NDJSON</DialogTitle>
+        </DialogHeader>
         <textarea
           autoFocus
           value={text}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === "Enter") onSubmit();
-            if (e.key === "Escape") onCancel();
           }}
           placeholder='{"foo": [1, 2, 3]}'
-          style={{
-            flex: 1,
-            minHeight: 320,
-            fontFamily: "ui-monospace, monospace",
-            fontSize: 12,
-            padding: 8,
-            border: "1px solid #ccc",
-            resize: "vertical",
-          }}
+          className="min-h-[320px] resize-y rounded-md border border-input bg-background p-3 font-mono text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            fontSize: 12,
-            color: "#666",
-          }}
-        >
-          <span>{text.length.toLocaleString()} chars · Ctrl+Enter to open · Esc to cancel</span>
-          <span>
-            <button onClick={onCancel} style={{ marginRight: 8 }}>Cancel</button>
-            <button onClick={onSubmit} disabled={!text.trim()}>Open</button>
+        <DialogFooter className="!flex-row !justify-between !sm:flex-row !sm:justify-between">
+          <span className="self-center text-xs text-muted-foreground">
+            {text.length.toLocaleString()} chars · Ctrl+Enter to open
           </span>
-        </div>
-      </div>
-    </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={tryFormat} disabled={!text.trim()}>
+              <Sparkles className="h-3.5 w-3.5" /> Format
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={onSubmit} disabled={!text.trim()}>
+              Open
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function App() {
+  const { theme, toggle: toggleTheme } = useTheme();
   const [session, setSession] = useState<OpenSession | null>(null);
   const [progress, setProgress] = useState<string>("");
   const [selected, setSelected] = useState<NodeId | null>(null);
@@ -151,14 +157,8 @@ export function App() {
   function menuItems(node: NodeId | null): ContextMenuItem[] {
     if (node === null || !session) return [];
     return [
-      {
-        label: "Search from this node",
-        onClick: () => setSearchScope(node),
-      },
-      {
-        label: "Export subtree…",
-        onClick: () => exportSubtreeFlow(node),
-      },
+      { label: "Search from this node", onClick: () => setSearchScope(node) },
+      { label: "Export subtree…", onClick: () => exportSubtreeFlow(node) },
     ];
   }
 
@@ -166,11 +166,16 @@ export function App() {
     if (!session) return;
     const ptr = await getPointer(session.sessionId, node);
     const safe = (ptr || "root").replace(/[/~]/g, "_").replace(/^_/, "");
-    const result = await runExportFlow(
-      session.sessionId,
-      node,
-      `${safe || "root"}.json`,
-    );
+    const result = await runExportFlow(session.sessionId, node, `${safe || "root"}.json`);
+    if (result) {
+      setPointerHint(result);
+      setTimeout(() => setPointerHint(""), 4000);
+    }
+  }
+
+  async function formatWholeFile() {
+    if (!session) return;
+    const result = await runFormatFlow(session.sessionId, session.rootId, session.path);
     if (result) {
       setPointerHint(result);
       setTimeout(() => setPointerHint(""), 4000);
@@ -247,7 +252,7 @@ export function App() {
       const resp = await openText(text, (p) => {
         if (p.phase === "scanning") {
           const pct = ((p.bytes_done / Math.max(1, p.bytes_total)) * 100).toFixed(0);
-          setProgress(`scanning: ${pct}%`);
+          setProgress(`scanning ${pct}%`);
         } else if (p.phase === "ready") {
           setProgress(`ready (${p.build_ms} ms)`);
         } else if (p.phase === "error") {
@@ -264,7 +269,7 @@ export function App() {
       setPasteOpen(false);
       setPasteText("");
     } catch (err: unknown) {
-      const msg = (err && typeof err === "object" && "message" in err)
+      const msg = err && typeof err === "object" && "message" in err
         ? String((err as { message: unknown }).message)
         : String(err);
       setProgress(`error: ${msg}`);
@@ -283,7 +288,7 @@ export function App() {
     const resp = await openFile(picked, (p) => {
       if (p.phase === "scanning") {
         const pct = ((p.bytes_done / Math.max(1, p.bytes_total)) * 100).toFixed(0);
-        setProgress(`scanning: ${pct}%`);
+        setProgress(`scanning ${pct}%`);
       } else if (p.phase === "ready") {
         setProgress(`ready (${p.build_ms} ms)`);
       } else if (p.phase === "error") {
@@ -299,40 +304,54 @@ export function App() {
     });
   }
 
+  function fmtBytes(n: number): string {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  }
+
   return (
-    <main
-      style={{
-        fontFamily: "system-ui",
-        height: "100vh",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <header style={{ padding: 8, borderBottom: "1px solid #ddd" }}>
-        <button onClick={pickFile}>📁 Open</button>{" "}
-        <button onClick={() => setPasteOpen(true)}>📋 Paste JSON</button>{" "}
-        <span style={{ color: "#666" }}>{progress}</span>
+    <main className="flex h-screen flex-col bg-background text-foreground">
+      <header className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+        <div className="flex items-center gap-1.5 pr-2 font-semibold tracking-tight">
+          <FileJson className="h-4 w-4 text-primary" /> jfmt
+        </div>
+        <Button size="sm" variant="outline" onClick={pickFile}>
+          <FolderOpen className="h-3.5 w-3.5" /> Open
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setPasteOpen(true)}>
+          <Clipboard className="h-3.5 w-3.5" /> Paste
+        </Button>
         {session && (
-          <span style={{ marginLeft: 16, color: "#444", fontSize: 12 }}>
-            {session.path} · {session.format} · {session.totalBytes} bytes
+          <Button size="sm" variant="outline" onClick={formatWholeFile} title="Export current document, formatted">
+            <Sparkles className="h-3.5 w-3.5" /> Format
+          </Button>
+        )}
+        {progress && (
+          <span className="text-xs text-muted-foreground">{progress}</span>
+        )}
+        {session && (
+          <span className="ml-1 truncate text-xs text-muted-foreground" title={session.path}>
+            <span className="font-medium text-foreground">{session.path}</span>{" "}
+            · {session.format} · {fmtBytes(session.totalBytes)}
           </span>
         )}
         {session && selected !== null && (
-          <button
+          <Button
+            size="sm"
+            variant="ghost"
             onClick={copyCurrentPointer}
             title="Copy JSON Pointer (Ctrl+C with no text selected)"
-            style={{ marginLeft: 8 }}
           >
-            📋 Copy ptr
-          </button>
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
         )}
         {pointerHint && (
-          <span style={{ marginLeft: 8, color: "#080", fontSize: 12 }}>
-            {pointerHint}
-          </span>
+          <span className="text-xs text-emerald-600 dark:text-emerald-400">{pointerHint}</span>
         )}
         {session && (
-          <span style={{ marginLeft: 16 }}>
+          <div className="ml-2">
             <SearchBar
               state={searchState}
               cursor={searchCursor}
@@ -342,11 +361,16 @@ export function App() {
               scopePath={scopePath}
               onClearScope={() => setSearchScope(undefined)}
             />
-          </span>
+          </div>
         )}
+        <div className="ml-auto">
+          <Button size="icon" variant="ghost" onClick={toggleTheme} title="Toggle theme">
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        </div>
       </header>
       {session && (
-        <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        <div className="flex flex-1 overflow-hidden">
           <HitList
             state={searchState}
             cursor={searchCursor}
@@ -354,7 +378,7 @@ export function App() {
             sessionId={session.sessionId}
             rootId={session.rootId}
           />
-          <div style={{ flex: "0 0 40%", borderRight: "1px solid #ddd" }}>
+          <div className="basis-[40%] border-r overflow-hidden">
             <Tree
               ref={treeRef}
               sessionId={session.sessionId}
@@ -367,7 +391,7 @@ export function App() {
               onContextMenu={(node, x, y) => setMenu({ node, x, y })}
             />
           </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
+          <div className="flex-1 overflow-hidden">
             <Preview
               sessionId={session.sessionId}
               node={selected}
@@ -385,14 +409,13 @@ export function App() {
           onDismiss={() => setMenu(null)}
         />
       )}
-      {pasteOpen && (
-        <PasteModal
-          text={pasteText}
-          onChange={setPasteText}
-          onCancel={() => setPasteOpen(false)}
-          onSubmit={submitPaste}
-        />
-      )}
+      <PasteModal
+        open={pasteOpen}
+        text={pasteText}
+        onChange={setPasteText}
+        onClose={() => setPasteOpen(false)}
+        onSubmit={submitPaste}
+      />
     </main>
   );
 }

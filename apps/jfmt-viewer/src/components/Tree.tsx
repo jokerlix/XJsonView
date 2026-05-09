@@ -346,11 +346,8 @@ export const Tree = forwardRef<TreeHandle, Props>(function Tree(
   return (
     <div
       ref={containerRef}
-      style={{
-        height: "100%",
-        overflow: "auto",
-        contain: "strict",
-      }}
+      className="h-full overflow-auto bg-background"
+      style={{ contain: "strict" }}
     >
       <div
         style={{
@@ -367,20 +364,13 @@ export const Tree = forwardRef<TreeHandle, Props>(function Tree(
               <div
                 key={vi.key}
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
                   transform: `translateY(${vi.start}px)`,
                   height: ROW_HEIGHT,
-                  paddingLeft: row.depth * 16,
-                  fontFamily: "ui-monospace, monospace",
-                  fontSize: 13,
-                  color: "#bbb",
-                  fontStyle: "italic",
+                  paddingLeft: row.depth * 14 + 4,
                 }}
+                className="absolute left-0 top-0 w-full font-mono text-[13px] italic text-muted-foreground/50"
               >
-                … row {row.idx}
+                … row {row.idx.toLocaleString()}
               </div>
             );
           }
@@ -390,14 +380,8 @@ export const Tree = forwardRef<TreeHandle, Props>(function Tree(
           return (
             <div
               key={vi.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${vi.start}px)`,
-                background: selected ? "#cce4ff" : "transparent",
-              }}
+              style={{ transform: `translateY(${vi.start}px)` }}
+              className={`absolute left-0 top-0 w-full ${selected ? "bg-primary/15" : ""}`}
             >
               <TreeRow
                 child={row.child}

@@ -2,6 +2,8 @@ import React, { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Hit, SearchState } from "../lib/searchState";
 import { childForSegment, getValue, NodeId } from "../api";
+import { cn } from "@/lib/utils";
+import { highlightJson } from "@/lib/jsonHighlight";
 
 interface Props {
   state: SearchState;
@@ -31,24 +33,42 @@ export function HitList({ state, cursor, onPick, sessionId, rootId }: Props) {
     err: string | null;
   } | null>(null);
   const hoverTimerRef = useRef<number | null>(null);
+  const hoverCloseTimerRef = useRef<number | null>(null);
   const hoverGenRef = useRef(0);
 
-  function cancelHover() {
+  function clearOpenTimer() {
     if (hoverTimerRef.current !== null) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-    hoverGenRef.current += 1;
-    setHover(null);
+  }
+  function clearCloseTimer() {
+    if (hoverCloseTimerRef.current !== null) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+  }
+
+  /// Schedule popover close with a small grace period so the user can
+  /// move the mouse from the row into the popover without it vanishing.
+  function scheduleHide() {
+    clearOpenTimer();
+    clearCloseTimer();
+    hoverCloseTimerRef.current = window.setTimeout(() => {
+      hoverGenRef.current += 1;
+      setHover(null);
+    }, 150);
+  }
+
+  function keepOpen() {
+    clearCloseTimer();
   }
 
   async function startHover(hit: Hit, hitIdx: number, x: number, y: number) {
-    if (hoverTimerRef.current !== null) clearTimeout(hoverTimerRef.current);
+    clearOpenTimer();
+    clearCloseTimer();
     const myGen = ++hoverGenRef.current;
     hoverTimerRef.current = window.setTimeout(async () => {
-      // Walk the JSON pointer; if the last seg is a scalar leaf we get
-      // its parent's NodeId (showing the full record gives more context
-      // than just the leaf value alone).
       const segs = hit.path
         .split("/")
         .slice(1)
@@ -57,9 +77,8 @@ export function HitList({ state, cursor, onPick, sessionId, rootId }: Props) {
       let okSoFar = true;
       for (let i = 0; i < segs.length; i++) {
         const childId = await childForSegment(sessionId, cur, segs[i]);
-        if (myGen !== hoverGenRef.current) return; // hover cancelled
+        if (myGen !== hoverGenRef.current) return;
         if (childId === null) {
-          // Leaf scalar — only valid as last segment; parent is `cur`.
           if (i !== segs.length - 1) okSoFar = false;
           break;
         }
@@ -78,36 +97,37 @@ export function HitList({ state, cursor, onPick, sessionId, rootId }: Props) {
         setHover({ hitIdx, x, y, json: null, err: String(e) });
       }
     }, HOVER_DELAY_MS);
-    setHover({ hitIdx, x, y, json: null, err: null }); // show "Loading…"
+    setHover({ hitIdx, x, y, json: null, err: null });
   }
 
   if (state.hits.length === 0 && !state.scanning) return null;
 
   return (
-    <div
-      style={{
-        flex: "0 0 240px",
-        borderRight: "1px solid #ddd",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          padding: "4px 8px",
-          fontSize: 11,
-          color: "#666",
-          borderBottom: "1px solid #eee",
-        }}
-      >
-        {state.scanning
-          ? `Scanning… ${state.totalSoFar} hits`
-          : `${state.hits.length} hits${state.hitCap ? " (1000+ — refine query)" : ""}`}
-        {state.error && <span style={{ color: "#c00" }}> · {state.error}</span>}
+    <div className="flex w-[260px] flex-col overflow-hidden border-r bg-muted/30">
+      <div className="flex items-center gap-1 border-b px-3 py-2 text-[11px] text-muted-foreground">
+        {state.scanning ? (
+          <>
+            <Spinner /> Scanning · {state.totalSoFar.toLocaleString()} hits
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-foreground">
+              {state.hits.length.toLocaleString()}
+            </span>{" "}
+            hits
+            {state.hitCap && (
+              <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                1000+ — refine
+              </span>
+            )}
+          </>
+        )}
+        {state.error && (
+          <span className="ml-1 text-destructive">· {state.error}</span>
+        )}
       </div>
-      <div ref={containerRef} style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ height: v.getTotalSize(), position: "relative" }}>
+      <div ref={containerRef} className="flex-1 overflow-auto">
+        <div style={{ height: v.getTotalSize() }} className="relative">
           {v.getVirtualItems().map((vi) => (
             <HitRow
               key={vi.key}
@@ -123,46 +143,47 @@ export function HitList({ state, cursor, onPick, sessionId, rootId }: Props) {
                   e.currentTarget.getBoundingClientRect().top,
                 )
               }
-              onMouseLeave={cancelHover}
+              onMouseLeave={scheduleHide}
             />
           ))}
         </div>
       </div>
-      {hover && <HoverPopover hover={hover} />}
+      {hover && (
+        <HoverPopover hover={hover} onMouseEnter={keepOpen} onMouseLeave={scheduleHide} />
+      )}
     </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border border-muted-foreground border-t-transparent" />
   );
 }
 
 function HoverPopover({
   hover,
+  onMouseEnter,
+  onMouseLeave,
 }: {
-  hover: { hitIdx: number; x: number; y: number; json: string | null; err: string | null };
+  hover: { x: number; y: number; json: string | null; err: string | null };
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
   return (
     <div
-      style={{
-        position: "fixed",
-        left: hover.x,
-        top: hover.y,
-        maxWidth: 520,
-        maxHeight: 360,
-        overflow: "auto",
-        background: "#fff",
-        border: "1px solid #aaa",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-        padding: 8,
-        fontFamily: "ui-monospace, monospace",
-        fontSize: 11,
-        whiteSpace: "pre",
-        zIndex: 1000,
-        pointerEvents: "none",
-      }}
+      style={{ left: hover.x, top: hover.y }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      className="fixed z-50 max-h-[420px] max-w-[640px] overflow-auto whitespace-pre rounded-md border bg-card p-2 font-mono text-[11px] text-card-foreground shadow-lg"
     >
-      {hover.err
-        ? <span style={{ color: "#c00" }}>{hover.err}</span>
-        : hover.json === null
-          ? <span style={{ color: "#999" }}>Loading…</span>
-          : hover.json}
+      {hover.err ? (
+        <span className="text-destructive">{hover.err}</span>
+      ) : hover.json === null ? (
+        <span className="text-muted-foreground">Loading…</span>
+      ) : (
+        highlightJson(hover.json)
+      )}
     </div>
   );
 }
@@ -187,28 +208,25 @@ function HitRow({
       onClick={onClick}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      style={{
-        position: "absolute",
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 22,
-        transform: `translateY(${top}px)`,
-        background: selected ? "#cce4ff" : "transparent",
-        cursor: "pointer",
-        padding: "2px 8px",
-        fontFamily: "ui-monospace, monospace",
-        fontSize: 11,
-        whiteSpace: "nowrap",
-        overflow: "hidden",
-        textOverflow: "ellipsis",
-      }}
+      style={{ transform: `translateY(${top}px)` }}
+      className={cn(
+        "absolute left-0 right-0 top-0 flex h-[22px] cursor-pointer items-center gap-1 overflow-hidden whitespace-nowrap px-2 font-mono text-[11px]",
+        selected ? "bg-primary/10 text-foreground" : "hover:bg-accent/50",
+      )}
     >
-      <span style={{ color: hit.matched_in === "key" ? "#06a" : "#a60" }}>
-        {hit.matched_in === "key" ? "K" : "V"}{" "}
+      <span
+        className={cn(
+          "inline-block min-w-[12px] text-center font-bold",
+          hit.matched_in === "key" ? "text-blue-600 dark:text-blue-400" : "text-amber-600 dark:text-amber-400",
+        )}
+      >
+        {hit.matched_in === "key" ? "K" : "V"}
       </span>
-      <span style={{ color: "#444" }}>{hit.path}</span>{" "}
-      <span style={{ color: "#888" }} dangerouslySetInnerHTML={{ __html: renderSnippet(hit.snippet) }} />
+      <span className="truncate text-foreground/70">{hit.path}</span>
+      <span
+        className="truncate text-muted-foreground"
+        dangerouslySetInnerHTML={{ __html: renderSnippet(hit.snippet) }}
+      />
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { SearchMode, SearchQuery } from "../api";
 import { SearchState } from "../lib/searchState";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 
 interface Props {
   onQuery: (q: SearchQuery) => void;
@@ -14,7 +17,15 @@ interface Props {
 
 const DEBOUNCE_MS = 250;
 
-export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange, scopePath, onClearScope }: Props) {
+export function SearchBar({
+  onQuery,
+  onCancel,
+  state,
+  cursor,
+  onCursorChange,
+  scopePath,
+  onClearScope,
+}: Props) {
   const [needle, setNeedle] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [scope, setScope] = useState<SearchQuery["scope"]>("both");
@@ -22,10 +33,6 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange, sc
   const tRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Keep `onQuery`/`onCancel` in refs so the debounce only re-fires when
-  // the actual query inputs change. Without this, every App re-render
-  // hands SearchBar a fresh callback closure and triggers a redundant
-  // search restart, causing visible flicker.
   const onQueryRef = useRef(onQuery);
   const onCancelRef = useRef(onCancel);
   useEffect(() => {
@@ -78,38 +85,49 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange, sc
         : "";
 
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-      <input
-        ref={inputRef}
-        value={needle}
-        onChange={(e) => setNeedle(e.target.value)}
-        placeholder="🔍 search"
-        title={state.queryError ?? undefined}
-        style={{
-          width: 200,
-          padding: "2px 6px",
-          fontFamily: "ui-monospace, monospace",
-          fontSize: 12,
-          border: state.queryError ? "1px solid #c33" : undefined,
-        }}
-      />
-      <button
+    <div className="flex items-center gap-1">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          ref={inputRef}
+          value={needle}
+          onChange={(e) => setNeedle(e.target.value)}
+          placeholder="Search…"
+          title={state.queryError ?? undefined}
+          className={`h-8 w-56 pl-7 font-mono text-xs ${state.queryError ? "border-destructive focus-visible:ring-destructive" : ""}`}
+        />
+        {needle && (
+          <button
+            onClick={() => setNeedle("")}
+            title="Clear (Esc)"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      <Button
+        size="sm"
+        variant={caseSensitive ? "default" : "outline"}
         onClick={() => setCaseSensitive((b) => !b)}
         title="Case sensitive"
-        style={{ fontWeight: caseSensitive ? "bold" : "normal" }}
+        className="h-8 w-8 p-0 font-mono text-xs"
       >
         Aa
-      </button>
-      <button
+      </Button>
+      <Button
+        size="sm"
+        variant={mode === "regex" ? "default" : "outline"}
         onClick={() => setMode((m) => (m === "regex" ? "substring" : "regex"))}
         title="Regex (toggle)"
-        style={{ fontWeight: mode === "regex" ? "bold" : "normal" }}
+        className="h-8 w-8 p-0 font-mono text-xs"
       >
         .*
-      </button>
+      </Button>
       <select
         value={scope}
         onChange={(e) => setScope(e.target.value as SearchQuery["scope"])}
+        className="h-8 rounded-md border border-input bg-background px-1 text-xs"
       >
         <option value="both">both</option>
         <option value="keys">keys</option>
@@ -119,42 +137,34 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange, sc
         <span
           onClick={onClearScope}
           title="Click to clear scope"
-          style={{
-            background: "#eef",
-            border: "1px solid #aac",
-            padding: "2px 6px",
-            fontSize: 11,
-            cursor: "pointer",
-            borderRadius: 3,
-          }}
+          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300 dark:hover:bg-blue-950/60"
         >
-          scope: {scopePath} ✕
+          scope: {scopePath} <X className="h-3 w-3" />
         </span>
       )}
-      <span style={{ color: "#666", fontSize: 12, minWidth: 60 }}>
-        {counter}
-      </span>
+      <span className="min-w-[60px] text-xs text-muted-foreground">{counter}</span>
       {state.hits.length > 0 && (
         <>
-          <button
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
             onClick={() => onCursorChange((cursor - 1 + state.hits.length) % state.hits.length)}
             title="Previous (Shift+F3)"
           >
-            ↑
-          </button>
-          <button
+            <ChevronUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
             onClick={() => onCursorChange((cursor + 1) % state.hits.length)}
             title="Next (F3)"
           >
-            ↓
-          </button>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
         </>
       )}
-      {needle && (
-        <button onClick={() => setNeedle("")} title="Clear (Esc)">
-          ✕
-        </button>
-      )}
-    </span>
+    </div>
   );
 }

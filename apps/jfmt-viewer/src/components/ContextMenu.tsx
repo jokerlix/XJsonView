@@ -30,18 +30,8 @@ export function ContextMenu({ x, y, items, onDismiss }: Props) {
   return (
     <div
       role="menu"
-      style={{
-        position: "fixed",
-        top: y,
-        left: x,
-        background: "white",
-        border: "1px solid #888",
-        boxShadow: "0 2px 6px rgba(0,0,0,0.2)",
-        padding: 4,
-        zIndex: 1000,
-        fontFamily: "system-ui",
-        fontSize: 13,
-      }}
+      style={{ top: y, left: x }}
+      className="fixed z-50 min-w-[180px] rounded-md border bg-card p-1 text-sm text-card-foreground shadow-md"
     >
       {items.map((it, i) => (
         <div
@@ -52,12 +42,7 @@ export function ContextMenu({ x, y, items, onDismiss }: Props) {
             it.onClick();
             onDismiss();
           }}
-          style={{
-            padding: "4px 12px",
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "#eef")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          className="cursor-pointer rounded-sm px-2 py-1.5 hover:bg-accent hover:text-accent-foreground"
         >
           {it.label}
         </div>
