@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "jfmt-viewer (M8.1)",
+        "title": "jfmt-viewer",
         "width": 1200,
         "height": 800,
         "resizable": true
@@ -25,6 +25,13 @@
     "targets": ["msi", "nsis", "deb", "appimage", "dmg"],
     "category": "DeveloperTool",
     "shortDescription": "Streaming viewer for large JSON / NDJSON files",
-    "longDescription": "jfmt-viewer browses JSON / NDJSON files of arbitrary size with virtual scrolling and streaming search. Pairs with the jfmt CLI."
+    "longDescription": "jfmt-viewer browses JSON / NDJSON files of arbitrary size with virtual scrolling and streaming search. Pairs with the jfmt CLI.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }
