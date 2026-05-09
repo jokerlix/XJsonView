@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { getValue, NodeId } from "../api";
+import { ChildSummary, getValue, NodeId } from "../api";
 
 interface Props {
   sessionId: string;
   node: NodeId | null;
+  leaf?: ChildSummary | null;
   onExport?: (node: NodeId) => void;
 }
 
-export function Preview({ sessionId, node, onExport }: Props) {
+export function Preview({ sessionId, node, leaf, onExport }: Props) {
   const [json, setJson] = useState<string>("");
   const [truncated, setTruncated] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -18,6 +19,7 @@ export function Preview({ sessionId, node, onExport }: Props) {
       setJson("");
       setTruncated(false);
       setErr(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;
@@ -39,6 +41,28 @@ export function Preview({ sessionId, node, onExport }: Props) {
       cancelled = true;
     };
   }, [sessionId, node]);
+
+  // Scalar leaf — render its inline preview directly; no IPC needed.
+  if (node === null && leaf) {
+    return (
+      <div style={{ height: "100%", overflow: "auto" }}>
+        <div style={{ padding: "8px 16px", color: "#666", fontSize: 12 }}>
+          {leaf.kind} · <strong>{leaf.key}</strong>
+        </div>
+        <pre
+          style={{
+            margin: 0,
+            padding: 16,
+            fontFamily: "ui-monospace, monospace",
+            fontSize: 12,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {leaf.preview ?? ""}
+        </pre>
+      </div>
+    );
+  }
 
   if (node === null) {
     return (

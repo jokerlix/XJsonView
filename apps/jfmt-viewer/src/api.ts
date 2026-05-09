@@ -61,6 +61,15 @@ export async function openFile(
   return invoke<OpenFileResp>("open_file", { path, onProgress: channel });
 }
 
+export async function openText(
+  content: string,
+  onProgress: (p: IndexProgress) => void,
+): Promise<OpenFileResp> {
+  const channel = new Channel<IndexProgress>();
+  channel.onmessage = onProgress;
+  return invoke<OpenFileResp>("open_text", { content, onProgress: channel });
+}
+
 export async function closeFile(sessionId: string): Promise<void> {
   await invoke("close_file", { sessionId });
 }
@@ -85,6 +94,19 @@ export async function getValue(
   maxBytes?: number,
 ): Promise<{ json: string; truncated: boolean }> {
   return invoke("get_value", { sessionId, node, maxBytes });
+}
+
+export async function childForSegment(
+  sessionId: string,
+  parent: NodeId,
+  segment: string,
+): Promise<NodeId | null> {
+  const r = await invoke<{ node: NodeId | null }>("child_for_segment", {
+    sessionId,
+    parent,
+    segment,
+  });
+  return r.node;
 }
 
 export async function getPointer(

@@ -22,19 +22,29 @@ export function SearchBar({ onQuery, onCancel, state, cursor, onCursorChange, sc
   const tRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Keep `onQuery`/`onCancel` in refs so the debounce only re-fires when
+  // the actual query inputs change. Without this, every App re-render
+  // hands SearchBar a fresh callback closure and triggers a redundant
+  // search restart, causing visible flicker.
+  const onQueryRef = useRef(onQuery);
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => {
+    onQueryRef.current = onQuery;
+    onCancelRef.current = onCancel;
+  });
   useEffect(() => {
     if (tRef.current !== null) clearTimeout(tRef.current);
     tRef.current = window.setTimeout(() => {
       if (needle.trim() === "") {
-        onCancel();
+        onCancelRef.current();
       } else {
-        onQuery({ needle, mode, case_sensitive: caseSensitive, scope });
+        onQueryRef.current({ needle, mode, case_sensitive: caseSensitive, scope });
       }
     }, DEBOUNCE_MS);
     return () => {
       if (tRef.current !== null) clearTimeout(tRef.current);
     };
-  }, [needle, caseSensitive, scope, mode, onQuery, onCancel]);
+  }, [needle, caseSensitive, scope, mode]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
